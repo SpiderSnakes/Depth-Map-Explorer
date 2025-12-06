@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Depth Map Explorer - Effets Visuels Créatifs</title>
+    <meta name="description" content="Explorez 13 effets visuels uniques utilisant les depth maps. Parallaxe 3D, profondeur de champ, brouillard et plus encore.">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    
+    <!-- Common Styles -->
+    <link rel="stylesheet" href="assets/css/common.css">
+    
+    <style>
+        /* Homepage specific styles */
+        
+        /* Animated background */
+        .bg-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(ellipse 100% 80% at 50% 0%, rgba(0, 212, 255, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse 80% 60% at 80% 100%, rgba(255, 0, 170, 0.1) 0%, transparent 50%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            padding: 4rem 2rem 3rem;
+            position: relative;
+        }
+
+        .hero-title {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(2.5rem, 8vw, 5rem);
+            font-weight: 700;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #fff 0%, var(--accent-cyan) 50%, var(--accent-magenta) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 3s ease-in-out infinite;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.2); }
+        }
+
+        .hero-subtitle {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            max-width: 700px;
+            margin: 0 auto 2rem;
+        }
+
+        /* Upload CTA */
+        .upload-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem 2rem;
+            background: var(--gradient-secondary);
+            color: white;
+            text-decoration: none;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all var(--transition-normal);
+            box-shadow: 0 10px 40px rgba(0, 212, 255, 0.3);
+        }
+
+        .upload-cta:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 20px 60px rgba(0, 212, 255, 0.4);
+            color: white;
+        }
+
+        .upload-cta:focus-visible {
+            outline: 3px solid white;
+            outline-offset: 3px;
+        }
+
+        /* Stats */
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            margin-top: 3rem;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            font-family: 'Playfair Display', serif;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        /* Main content */
+        main {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .section-header h2 {
+            font-family: 'Playfair Display', serif;
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .section-header p {
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* Effects grid */
+        .effects-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2rem;
+        }
+
+        .effect-card {
+            background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.08) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: var(--radius-xl);
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .effect-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, var(--card-color) 0%, transparent 100%);
+            opacity: 0;
+            transition: opacity 0.4s;
+            z-index: 0;
+        }
+
+        .effect-card:hover {
+            transform: translateY(-10px) scale(1.02);
+            border-color: var(--card-color);
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.4), 0 0 60px var(--card-color);
+        }
+
+        .effect-card:hover::before {
+            opacity: 0.1;
+        }
+
+        .effect-card:focus-within {
+            border-color: var(--card-color);
+            box-shadow: 0 0 0 3px var(--card-color);
+        }
+
+        .card-visual {
+            height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 5rem;
+            position: relative;
+            overflow: hidden;
+            background: radial-gradient(circle at 50% 120%, var(--card-color), transparent 70%);
+        }
+
+        .card-number {
+            position: absolute;
+            top: 1.5rem;
+            left: 1.5rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.3);
+            letter-spacing: 0.15em;
+        }
+
+        .card-body {
+            padding: 2rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .card-body h3 {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.5rem;
+            margin-bottom: 0.75rem;
+            color: var(--text-primary);
+        }
+
+        .card-body p {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
+            line-height: 1.7;
+        }
+
+        .card-tech {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .tech-tag {
+            font-size: 0.7rem;
+            padding: 0.4rem 0.8rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            color: var(--text-secondary);
+        }
+
+        .card-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: var(--card-color);
+            text-decoration: none;
+            font-size: 1rem;
+            font-weight: 500;
+            padding: 0.75rem 1.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius-md);
+            transition: all var(--transition-normal);
+        }
+
+        .card-link:hover {
+            background: var(--card-color);
+            color: var(--bg-primary);
+        }
+
+        .card-link svg {
+            width: 18px;
+            height: 18px;
+            transition: transform var(--transition-normal);
+        }
+
+        .card-link:hover svg {
+            transform: translateX(5px);
+        }
+
+        /* Demo images section */
+        .demo-section {
+            margin-top: 4rem;
+            padding: 3rem;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: var(--radius-xl);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .demo-section h3 {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+
+        .demo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 1rem;
+        }
+
+        .demo-item {
+            position: relative;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform var(--transition-normal);
+        }
+
+        .demo-item:hover {
+            transform: scale(1.05);
+        }
+
+        .demo-item:focus-visible {
+            outline: 2px solid var(--accent-cyan);
+            outline-offset: 2px;
+        }
+
+        .demo-item img {
+            width: 100%;
+            aspect-ratio: 1;
+            object-fit: cover;
+            display: block;
+        }
+
+        .demo-item span {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 0.5rem;
+            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+            font-size: 0.7rem;
+            color: white;
+            text-align: center;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 4rem 2rem;
+            margin-top: 4rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        footer a {
+            color: var(--accent-cyan);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .effects-container {
+                grid-template-columns: 1fr;
+            }
+            .stats {
+                gap: 2rem;
+            }
+            header {
+                padding: 2rem 1rem;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .hero-title {
+                animation: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Skip link -->
+    <a href="#main-content" class="skip-link">Aller au contenu principal</a>
+    
+    <div class="bg-animation" aria-hidden="true"></div>
+
+    <header role="banner">
+        <h1 class="hero-title">Depth Map Explorer</h1>
+        <p class="hero-subtitle">
+            Découvrez les possibilités infinies des cartes de profondeur.
+            13 effets visuels uniques, entièrement interactifs et personnalisables.
+        </p>
+        <a href="pages/upload.html" class="upload-cta" aria-label="Uploader vos propres images">
+            <span aria-hidden="true">⬆️</span>
+            Uploader vos images
+        </a>
+        <div class="stats" role="list" aria-label="Statistiques">
+            <div class="stat" role="listitem">
+                <div class="stat-number">13</div>
+                <div class="stat-label">Effets</div>
+            </div>
+            <div class="stat" role="listitem">
+                <div class="stat-number">9</div>
+                <div class="stat-label">Images démo</div>
+            </div>
+            <div class="stat" role="listitem">
+                <div class="stat-number" aria-label="Infini">∞</div>
+                <div class="stat-label">Possibilités</div>
+            </div>
+        </div>
+    </header>
+
+    <main id="main-content" role="main">
+        <section class="section-header" aria-labelledby="effects-title">
+            <h2 id="effects-title">✨ Explorez les Effets</h2>
+            <p>Chaque effet exploite la profondeur de manière unique. Cliquez pour découvrir et expérimenter.</p>
+        </section>
+
+        <div class="effects-container" role="list" aria-label="Liste des effets visuels">
+            <!-- Parallax -->
+            <article class="effect-card" style="--card-color: rgba(0, 212, 255, 0.5);" role="listitem">
+                <div class="card-visual" aria-hidden="true">
+                    🔮
+                    <span class="card-number">01</span>
+                </div>
+                <div class="card-body">
+                    <h3>Parallaxe 3D</h3>
+                    <p>Créez une illusion de profondeur captivante. L'image réagit au mouvement de votre souris pour un effet 3D immersif.</p>
+                    <div class="card-tech" aria-label="Technologies utilisées">
+                        <span class="tech-tag">WebGL</span>
+                        <span class="tech-tag">GLSL</span>
+                        <span class="tech-tag">Interactif</span>
+                    </div>
+                    <a href="pages/parallax.html" class="card-link" aria-label="Explorer l'effet Parallaxe 3D">
+                        Explorer l'effet
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </a>
+                </div>
+            </article>
+
+            <!-- Depth of Field -->
+            <article class="effect-card" style="--card-color: rgba(255, 107, 53, 0.5);" role="listitem">
+                <div class="card-visual" aria-hidden="true">
+                    📷
+                    <span class="card-number">02</span>
+                </div>
+                <div class="card-body">
+                    <h3>Profondeur de Champ</h3>
+                    <p>Simulez l'effet bokeh des objectifs photo. Cliquez pour choisir le point focal et admirez le flou artistique.</p>
+                    <div class="card-tech" aria-label="Technologies utilisées">
+                        <span class="tech-tag">WebGL</span>
+                        <span class="tech-tag">Bokeh</span>
+                        <span class="tech-tag">Poisson Disk</span>
+                    </div>
+                    <a href="pages/depth-of-field.html" class="card-link" aria-label="Explorer l'effet Profondeur de Champ">
+                        Explorer l'effet
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </a>
+                </div>
+            </article>
+
+            <!-- Fog -->
+            <article class="effect-card" style="--card-color: rgba(136, 85, 255, 0.5);" role="listitem">
+                <div class="card-visual" aria-hidden="true">
+                    🌫️
+                    <span class="card-number">03</span>
+                </div>
+                <div class="card-body">
+                    <h3>Brouillard Atmosphérique</h3>
+                    <p>Ajoutez une ambiance mystérieuse avec un brouillard progressif. Plusieurs presets disponibles: matin, mystique, hiver.</p>
+                    <div class="card-tech" aria-label="Technologies utilisées">
+                        <span class="tech-tag">WebGL</span>
+                        <span class="tech-tag">Noise</span>
+                        <span class="tech-tag">Presets</span>
+                    </div>
+                    <a href="pages/fog.html" class="card-link" aria-label="Explorer l'effet Brouillard Atmosphérique">
+                        Explorer l'effet
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </a>
+                </div>
+            </article>
+
+            <!-- Displacement -->
+            <article class="effect-card" style="--card-color: rgba(16, 185, 129, 0.5);" role="listitem">
+                <div class="card-visual" aria-hidden="true">
+                    🏔️
+                    <span class="card-number">04</span>
+                </div>
+                <div class="card-body">
+                    <h3>Displacement 3D</h3>
+                    <p>Transformez l'image en une véritable surface 3D navigable. Utilisez la souris pour explorer tous les angles.</p>
+                    <div class="card-tech" aria-label="Technologies utilisées">
+                        <span class="tech-tag">Three.js</span>
+                        <span class="tech-tag">Mesh</span>
+                        <span class="tech-tag">OrbitControls</span>
+                    </div>
+                    <a href="pages/displacement.html" class="card-link" aria-label="Explorer l'effet Displacement 3D">
+                        Explorer l'effet
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </a>
+                </div>
+            </article>
+
+            <!-- Waves -->
+            <article class="effect-card" style="--card-color: rgba(59, 130, 246, 0.5);" role="listitem">
+                <div class="card-visual" aria-hidden="true">
+                    🌊
+                    <span class="card-number">05</span>
+                </div>
+                <div class="card-body">
+                    <h3>Vagues & Ondulations</h3>
+                    <p>Appliquez des déformations fluides à votre image. Trois modes: océan, ondulation concentrique, et pulse.</p>
+                    <div class="card-tech" aria-label="Technologies utilisées">
+                        <span class="tech-tag">WebGL</span>
+                        <span class="tech-tag">Animation</span>
+                        <span class="tech-tag">Chromatic</span>
+                    </div>
+                    <a href="pages/waves.html" class="card-link" aria-label="Explorer l'effet Vagues et Ondulations">
+                        Explorer l'effet
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </a>
+                </div>
+            </article>
+
+            <!-- Lighting -->
+            <article class="effect-card" style="--card-color: rgba(251, 191, 36, 0.5);" role="listitem">
+                <div class="card-visual" aria-hidden="true">
+                    💡
+                    <span class="card-number">06</span>
+                </div>
+                <div class="card-body">
+                    <h3>Éclairage Dynamique</h3>
+                    <p>Déplacez une source lumineuse virtuelle sur l'image. Les normales sont calculées en temps réel pour un rendu réaliste.</p>
+                    <div class="card-tech" aria-label="Technologies utilisées">
+                        <span class="tech-tag">WebGL</span>
+                        <span class="tech-tag">Normal Map</span>
+                        <span class="tech-tag">Specular</span>
+                    </div>
+                    <a href="pages/lighting.html" class="card-link" aria-label="Explorer l'effet Éclairage Dynamique">
+                        Explorer l'effet
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </a>
+                </div>
+            </article>
+
+            <!-- Relief -->
+            <article class="effect-card" style="--card-color: rgba(20, 184, 166, 0.5);" role="listitem">
+                <div class="card-visual" aria-hidden="true">
+                    🗿
+                    <span class="card-number">07</span>
+                </div>
+                <div class="card-body">
+                    <h3>Relief & Normal Mapping</h3>
+                    <p>Donnez du relief à vos images avec un effet d'embossage. Visualisez les normales ou le rendu combiné.</p>
+                    <div class="card-tech" aria-label="Technologies utilisées">
+                        <span class="tech-tag">WebGL</span>
+                        <span class="tech-tag">Sobel</span>
+                        <span class="tech-tag">Multi-mode</span>
+                    </div>
+                    <a href="pages/relief.html" class="card-link" aria-label="Explorer l'effet Relief et Normal Mapping">
+                        Explorer l'effet
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </a>
+                </div>
+            </article>
+
+            <!-- Zoom Depth -->
+            <article class="effect-card" style="--card-color: rgba(99, 102, 241, 0.5);" role="listitem">
+                <div class="card-visual" aria-hidden="true">
+                    🔍
+                    <span class="card-number">08</span>
+                </div>
+                <div class="card-body">
+                    <h3>Zoom Profondeur</h3>
+                    <p>Animation hypnotique qui vous fait plonger dans l'image. Chaque couche de profondeur zoome à son propre rythme.</p>
+                    <div class="card-tech" aria-label="Technologies utilisées">
+                        <span class="tech-tag">WebGL</span>
+                        <span class="tech-tag">Animation</span>
+                        <span class="tech-tag">Motion Blur</span>
+                    </div>
+                    <a href="pages/zoom-depth.html" class="card-link" aria-label="Explorer l'effet Zoom Profondeur">
+                        Explorer l'effet
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </a>
+                </div>
+            </article>
+
+            <!-- Layers -->
+            <article class="effect-card" style="--card-color: rgba(244, 63, 94, 0.5);" role="listitem">
+                <div class="card-visual" aria-hidden="true">
+                    📚
+                    <span class="card-number">09</span>
+                </div>
+                <div class="card-body">
+                    <h3>Séparation des Couches</h3>
+                    <p>Décomposez l'image en un diorama interactif. Faites glisser pour explorer les couches de profondeur séparément.</p>
+                    <div class="card-tech" aria-label="Technologies utilisées">
+                        <span class="tech-tag">Canvas</span>
+                        <span class="tech-tag">CSS 3D</span>
+                        <span class="tech-tag">Drag</span>
+                    </div>
+                    <a href="pages/layers.html" class="card-link" aria-label="Explorer l'effet Séparation des Couches">
+                        Explorer l'effet
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </a>
+                </div>
+            </article>
+
+            <!-- Rotation -->
+            <article class="effect-card" style="--card-color: rgba(245, 158, 11, 0.5);" role="listitem">
+                <div class="card-visual" aria-hidden="true">
+                    🎪
+                    <span class="card-number">10</span>
+                </div>
+                <div class="card-body">
+                    <h3>Rotation 3D Perspective</h3>
+                    <p>Visualisez l'image en 3D avec un vrai déplacement géométrique. Mode souris interactif ou rotation automatique.</p>
+                    <div class="card-tech" aria-label="Technologies utilisées">
+                        <span class="tech-tag">Three.js</span>
+                        <span class="tech-tag">Displacement</span>
+                        <span class="tech-tag">FOV</span>
+                    </div>
+                    <a href="pages/rotation.html" class="card-link" aria-label="Explorer l'effet Rotation 3D Perspective">
+                        Explorer l'effet
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </a>
+                </div>
+            </article>
+
+            <!-- Reveal -->
+            <article class="effect-card" style="--card-color: rgba(16, 185, 129, 0.5);" role="listitem">
+                <div class="card-visual" aria-hidden="true">
+                    🎭
+                    <span class="card-number">11</span>
+                </div>
+                <div class="card-body">
+                    <h3>Révélation Progressive</h3>
+                    <p>Parfait pour le storytelling. Révélez progressivement l'image couche par couche avec un effet lumineux.</p>
+                    <div class="card-tech" aria-label="Technologies utilisées">
+                        <span class="tech-tag">WebGL</span>
+                        <span class="tech-tag">Animation</span>
+                        <span class="tech-tag">Glow</span>
+                    </div>
+                    <a href="pages/reveal.html" class="card-link" aria-label="Explorer l'effet Révélation Progressive">
+                        Explorer l'effet
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </a>
+                </div>
+            </article>
+
+            <!-- Chromatic -->
+            <article class="effect-card" style="--card-color: rgba(139, 92, 246, 0.5);" role="listitem">
+                <div class="card-visual" aria-hidden="true">
+                    🌈
+                    <span class="card-number">12</span>
+                </div>
+                <div class="card-body">
+                    <h3>Aberration Chromatique</h3>
+                    <p>Séparez les canaux RGB pour un effet artistique. Modes radial, linéaire et spiral avec animation optionnelle.</p>
+                    <div class="card-tech" aria-label="Technologies utilisées">
+                        <span class="tech-tag">WebGL</span>
+                        <span class="tech-tag">RGB Split</span>
+                        <span class="tech-tag">Animation</span>
+                    </div>
+                    <a href="pages/chromatic.html" class="card-link" aria-label="Explorer l'effet Aberration Chromatique">
+                        Explorer l'effet
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </a>
+                </div>
+            </article>
+
+            <!-- Glitch -->
+            <article class="effect-card" style="--card-color: rgba(239, 68, 68, 0.5);" role="listitem">
+                <div class="card-visual" aria-hidden="true">
+                    ⚡
+                    <span class="card-number">13</span>
+                </div>
+                <div class="card-body">
+                    <h3>Glitch Profondeur</h3>
+                    <p>Effet de distorsion contrôlé basé sur la profondeur. Choisissez entre slice, RGB split et noise.</p>
+                    <div class="card-tech" aria-label="Technologies utilisées">
+                        <span class="tech-tag">WebGL</span>
+                        <span class="tech-tag">Noise</span>
+                        <span class="tech-tag">Scanlines</span>
+                    </div>
+                    <a href="pages/glitch.html" class="card-link" aria-label="Explorer l'effet Glitch Profondeur">
+                        Explorer l'effet
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </a>
+                </div>
+            </article>
+        </div>
+
+        <!-- Demo images -->
+        <section class="demo-section" aria-labelledby="demo-title">
+            <h3 id="demo-title">🖼️ Images de démonstration disponibles</h3>
+            <div class="demo-grid" role="list">
+                <div class="demo-item" role="listitem" tabindex="0"><img src="Images/Original/Aerial view.jpg" alt="Vue aérienne" loading="lazy"><span>Aerial View</span></div>
+                <div class="demo-item" role="listitem" tabindex="0"><img src="Images/Original/Aerial.jpg" alt="Aérien" loading="lazy"><span>Aerial</span></div>
+                <div class="demo-item" role="listitem" tabindex="0"><img src="Images/Original/Campagne.jpg" alt="Paysage de campagne" loading="lazy"><span>Campagne</span></div>
+                <div class="demo-item" role="listitem" tabindex="0"><img src="Images/Original/City.jpg" alt="Vue de ville" loading="lazy"><span>City</span></div>
+                <div class="demo-item" role="listitem" tabindex="0"><img src="Images/Original/Cloudly Forest.jpg" alt="Forêt nuageuse" loading="lazy"><span>Cloudly Forest</span></div>
+                <div class="demo-item" role="listitem" tabindex="0"><img src="Images/Original/Fôret.jpg" alt="Forêt" loading="lazy"><span>Forêt</span></div>
+                <div class="demo-item" role="listitem" tabindex="0"><img src="Images/Original/Metro.jpg" alt="Métro" loading="lazy"><span>Metro</span></div>
+                <div class="demo-item" role="listitem" tabindex="0"><img src="Images/Original/Montagne.jpg" alt="Montagne" loading="lazy"><span>Montagne</span></div>
+                <div class="demo-item" role="listitem" tabindex="0"><img src="Images/Original/Portait.jpg" alt="Portrait" loading="lazy"><span>Portrait</span></div>
+            </div>
+        </section>
+    </main>
+
+    <footer role="contentinfo">
+        <p>
+            Créé avec WebGL, Three.js et beaucoup de créativité ✨<br>
+            <a href="pages/upload.html">Uploadez vos propres images</a> pour explorer tous les effets.
+        </p>
+    </footer>
+
+    <!-- Initialize image manager for homepage -->
+    <script src="assets/js/core/image-manager.js"></script>
+    <script>
+        // Initialize
+        window.imageManager.init();
+    </script>
+</body>
+</html>

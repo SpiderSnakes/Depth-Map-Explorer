@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Séparation des Couches - Depth Map Explorer</title>
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/css/common.css">
+    <link rel="stylesheet" href="../assets/css/effects.css">
+    <style>
+        :root { --bg-primary: #0a0a0f; --accent-rose: #f43f5e; --accent-cyan: #00d4ff; --text-primary: #f0f0f5; --text-secondary: #8888aa; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'JetBrains Mono', monospace; background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; }
+        nav { position: fixed; top: 0; left: 0; right: 0; padding: 1rem 2rem; padding-left: 260px; display: flex; justify-content: space-between; z-index: 100; background: linear-gradient(to bottom, var(--bg-primary), transparent); transition: padding-left 0.3s; }
+        body.sidebar-collapsed nav { padding-left: 60px; }
+        nav a { color: var(--text-secondary); text-decoration: none; font-size: 0.85rem; }
+        .nav-title { font-family: 'Playfair Display', serif; font-size: 1.2rem; }
+        #canvas-container { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; perspective: 1500px; padding-left: 240px; padding-right: 340px; transition: padding-left 0.3s, padding-right 0.3s; }
+        body.sidebar-collapsed #canvas-container { padding-left: 40px; }
+        @media (max-width: 1400px) { #canvas-container { padding-right: 20px; } }
+        .layers-wrapper { position: relative; transform-style: preserve-3d; transition: transform 0.1s ease-out; }
+        .layer { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border-radius: 8px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3); }
+        .loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-primary); display: flex; align-items: center; justify-content: center; z-index: 2000; transition: opacity 0.5s; }
+        .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+        .loader-spinner { width: 50px; height: 50px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--accent-rose); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1rem; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .controls { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); background: rgba(18, 18, 26, 0.9); backdrop-filter: blur(20px); padding: 1.5rem 2rem; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1); display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center; margin-left: 120px; transition: margin-left 0.3s; }
+        body.sidebar-collapsed .controls { margin-left: 20px; }
+        .control-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        .control-group label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; }
+        .control-group input[type="range"] { width: 100px; height: 4px; -webkit-appearance: none; background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
+        .control-group input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; background: var(--accent-rose); border-radius: 50%; cursor: pointer; }
+        .value-display { font-size: 0.8rem; color: var(--accent-rose); text-align: center; }
+        @media (max-width: 768px) { nav { padding-left: 60px !important; } #canvas-container { padding-left: 40px !important; } .controls { margin-left: 20px !important; } }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loadingOverlay"><div class="loader"><div class="loader-spinner"></div><p>Chargement...</p></div></div>
+    <div id="image-sidebar"></div>
+    <div id="canvas-container"><div class="layers-wrapper" id="layersWrapper"></div></div>
+    <div class="controls">
+        <div class="control-group"><label>Couches</label><input type="range" id="layerCount" min="3" max="10" value="6"><span class="value-display" id="layerCount-value">6</span></div>
+        <div class="control-group"><label>Espacement</label><input type="range" id="spacing" min="10" max="150" value="60"><span class="value-display" id="spacing-value">60px</span></div>
+        <div class="control-group"><label>Rotation X</label><input type="range" id="rotateX" min="-45" max="45" value="15"><span class="value-display" id="rotateX-value">15°</span></div>
+        <div class="control-group"><label>Rotation Y</label><input type="range" id="rotateY" min="-45" max="45" value="-20"><span class="value-display" id="rotateY-value">-20°</span></div>
+    </div>
+    <script src="../assets/js/core/image-manager.js"></script>
+    <script src="../assets/js/components/sidebar.js"></script>
+    <script src="../assets/js/components/navigation.js"></script>
+    <script>
+        const wrapper = document.getElementById('layersWrapper');
+        const container = document.getElementById('canvas-container');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        
+        let imageData, depthData, imageWidth, imageHeight, layers = [];
+
+        function loadImage(url) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width; canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    resolve({ data: ctx.getImageData(0, 0, img.width, img.height), width: img.width, height: img.height });
+                };
+                img.src = url;
+            });
+        }
+
+        async function loadCurrentImage() {
+            const current = window.imageManager.getCurrentImage();
+            if (!current) return;
+            loadingOverlay.classList.remove('hidden');
+            try {
+                const [imgData, depthImg] = await Promise.all([loadImage(current.originalUrl), loadImage(current.depthUrl)]);
+                imageData = imgData.data; depthData = depthImg.data;
+                imageWidth = imgData.width; imageHeight = imgData.height;
+                createLayers();
+            } catch (e) { console.error(e); }
+            loadingOverlay.classList.add('hidden');
+        }
+
+        function createLayers() {
+            wrapper.innerHTML = ''; layers = [];
+            const count = parseInt(document.getElementById('layerCount').value);
+            const spacing = parseInt(document.getElementById('spacing').value);
+            const maxWidth = Math.min(400, (window.innerWidth - 300) * 0.5);
+            const maxHeight = window.innerHeight * 0.5;
+            let displayWidth = imageWidth, displayHeight = imageHeight;
+            if (displayWidth > maxWidth) { displayHeight = displayHeight * maxWidth / displayWidth; displayWidth = maxWidth; }
+            if (displayHeight > maxHeight) { displayWidth = displayWidth * maxHeight / displayHeight; displayHeight = maxHeight; }
+
+            for (let i = 0; i < count; i++) {
+                const canvas = document.createElement('canvas');
+                canvas.width = imageWidth; canvas.height = imageHeight;
+                canvas.className = 'layer';
+                canvas.style.width = displayWidth + 'px';
+                canvas.style.height = displayHeight + 'px';
+                const ctx = canvas.getContext('2d');
+                const layerData = ctx.createImageData(imageWidth, imageHeight);
+                const minDepth = i / count, maxDepth = (i + 1) / count;
+
+                for (let y = 0; y < imageHeight; y++) {
+                    for (let x = 0; x < imageWidth; x++) {
+                        const idx = (y * imageWidth + x) * 4;
+                        const depth = 1.0 - depthData.data[idx] / 255;
+                        if (depth >= minDepth && depth < maxDepth) {
+                            layerData.data[idx] = imageData.data[idx];
+                            layerData.data[idx + 1] = imageData.data[idx + 1];
+                            layerData.data[idx + 2] = imageData.data[idx + 2];
+                            layerData.data[idx + 3] = 255;
+                        }
+                    }
+                }
+                ctx.putImageData(layerData, 0, 0);
+                const z = (count - 1 - i) * spacing - (count * spacing / 2);
+                canvas.style.transform = `translate(-50%, -50%) translateZ(${z}px)`;
+                wrapper.appendChild(canvas);
+                layers.push(canvas);
+            }
+            updateTransform();
+        }
+
+        function updateTransform() {
+            wrapper.style.transform = `rotateX(${document.getElementById('rotateX').value}deg) rotateY(${document.getElementById('rotateY').value}deg)`;
+        }
+
+        function updateSpacing() {
+            const spacing = parseInt(document.getElementById('spacing').value);
+            const count = layers.length;
+            layers.forEach((layer, i) => {
+                const z = (count - 1 - i) * spacing - (count * spacing / 2);
+                layer.style.transform = `translate(-50%, -50%) translateZ(${z}px)`;
+            });
+        }
+
+        document.getElementById('layerCount').addEventListener('input', (e) => document.getElementById('layerCount-value').textContent = e.target.value);
+        document.getElementById('layerCount').addEventListener('change', createLayers);
+        document.getElementById('spacing').addEventListener('input', (e) => { document.getElementById('spacing-value').textContent = e.target.value + 'px'; updateSpacing(); });
+        document.getElementById('rotateX').addEventListener('input', (e) => { document.getElementById('rotateX-value').textContent = e.target.value + '°'; updateTransform(); });
+        document.getElementById('rotateY').addEventListener('input', (e) => { document.getElementById('rotateY-value').textContent = e.target.value + '°'; updateTransform(); });
+
+        let isDragging = false, lastX, lastY;
+        container.addEventListener('mousedown', (e) => { if (e.target.tagName !== 'INPUT') { isDragging = true; lastX = e.clientX; lastY = e.clientY; } });
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const rY = document.getElementById('rotateY'), rX = document.getElementById('rotateX');
+                rY.value = Math.max(-45, Math.min(45, parseInt(rY.value) + (e.clientX - lastX) * 0.5));
+                rX.value = Math.max(-45, Math.min(45, parseInt(rX.value) - (e.clientY - lastY) * 0.5));
+                document.getElementById('rotateY-value').textContent = rY.value + '°';
+                document.getElementById('rotateX-value').textContent = rX.value + '°';
+                updateTransform();
+                lastX = e.clientX; lastY = e.clientY;
+            }
+        });
+        document.addEventListener('mouseup', () => isDragging = false);
+
+        window.addEventListener('load', async () => {
+            await window.imageManager.init();
+            new ImageSidebar('image-sidebar', loadCurrentImage);
+            const observer = new MutationObserver(() => { const s = document.querySelector('.sidebar-inner'); if (s) document.body.classList.toggle('sidebar-collapsed', s.classList.contains('collapsed')); });
+            setTimeout(() => { const s = document.querySelector('.sidebar-inner'); if (s) observer.observe(s, { attributes: true, attributeFilter: ['class'] }); }, 100);
+            await loadCurrentImage();
+        });
+    </script>
+</body>
+</html>

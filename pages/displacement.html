@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Displacement 3D - Depth Map Explorer</title>
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/css/common.css">
+    <link rel="stylesheet" href="../assets/css/effects.css">
+    <style>
+        :root { --bg-primary: #0a0a0f; --accent-green: #10b981; --accent-cyan: #00d4ff; --text-primary: #f0f0f5; --text-secondary: #8888aa; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'JetBrains Mono', monospace; background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; overflow: hidden; }
+        nav { position: fixed; top: 0; left: 0; right: 0; padding: 1rem 2rem; padding-left: 260px; display: flex; justify-content: space-between; align-items: center; z-index: 100; background: linear-gradient(to bottom, var(--bg-primary), transparent); transition: padding-left 0.3s; }
+        body.sidebar-collapsed nav { padding-left: 60px; }
+        nav a { color: var(--text-secondary); text-decoration: none; font-size: 0.85rem; }
+        nav a:hover { color: var(--accent-cyan); }
+        .nav-title { font-family: 'Playfair Display', serif; font-size: 1.2rem; }
+        #canvas-container { width: 100vw; height: 100vh; padding-left: 240px; padding-right: 340px; transition: padding-left 0.3s, padding-right 0.3s; }
+        body.sidebar-collapsed #canvas-container { padding-left: 40px; }
+        @media (max-width: 1400px) { #canvas-container { padding-right: 20px; } }
+        .loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-primary); display: flex; align-items: center; justify-content: center; z-index: 2000; transition: opacity 0.5s; }
+        .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+        .loader { text-align: center; }
+        .loader-spinner { width: 50px; height: 50px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--accent-green); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1rem; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .controls { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); background: rgba(18, 18, 26, 0.9); backdrop-filter: blur(20px); padding: 1.5rem 2rem; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1); display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center; margin-left: 120px; transition: margin-left 0.3s; }
+        body.sidebar-collapsed .controls { margin-left: 20px; }
+        .control-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        .control-group label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; }
+        .control-group input[type="range"] { width: 100px; height: 4px; -webkit-appearance: none; background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
+        .control-group input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; background: var(--accent-green); border-radius: 50%; cursor: pointer; }
+        .value-display { font-size: 0.8rem; color: var(--accent-green); text-align: center; }
+        .mode-buttons { display: flex; gap: 0.5rem; }
+        .mode-btn { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: var(--text-secondary); padding: 0.4rem 0.8rem; border-radius: 8px; font-size: 0.7rem; cursor: pointer; font-family: inherit; }
+        .mode-btn.active { background: var(--accent-green); color: white; }
+        .instructions { position: fixed; top: 5rem; left: 260px; background: rgba(18, 18, 26, 0.8); padding: 1rem; border-radius: 12px; font-size: 0.75rem; color: var(--text-secondary); transition: left 0.3s; }
+        body.sidebar-collapsed .instructions { left: 60px; }
+        .instructions strong { color: var(--accent-green); }
+        .info-panel { position: fixed; top: 5rem; right: 2rem; width: 300px; background: rgba(18, 18, 26, 0.9); backdrop-filter: blur(20px); padding: 1.5rem; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1); }
+        .info-panel h2 { font-family: 'Playfair Display', serif; font-size: 1.3rem; margin-bottom: 1rem; color: var(--accent-green); }
+        .info-panel p { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.7; }
+        @media (max-width: 1400px) { .info-panel { display: none; } }
+        @media (max-width: 768px) { nav, .instructions { padding-left: 60px !important; left: 60px !important; } #canvas-container { padding-left: 40px !important; } .controls { margin-left: 20px !important; } }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loadingOverlay"><div class="loader"><div class="loader-spinner"></div><p>Chargement...</p></div></div>
+    <div id="image-sidebar"></div>
+    <div class="instructions"><strong>🖱️ Clic gauche</strong> — Rotation<br><strong>🖱️ Molette</strong> — Zoom<br><strong>🖱️ Clic droit</strong> — Pan</div>
+    <div id="canvas-container"></div>
+    <div class="controls">
+        <div class="control-group"><label>Hauteur</label><input type="range" id="displacement" min="0" max="100" value="50"><span class="value-display" id="displacement-value">50</span></div>
+        <div class="control-group"><label>Segments</label><input type="range" id="segments" min="32" max="256" value="128"><span class="value-display" id="segments-value">128</span></div>
+        <div class="control-group"><label>Wireframe</label><div class="mode-buttons"><button class="mode-btn" id="wireframeOff">Off</button><button class="mode-btn active" id="wireframeOn">On</button></div></div>
+        <div class="control-group"><label>Rotation</label><div class="mode-buttons"><button class="mode-btn" id="rotateOff">Off</button><button class="mode-btn active" id="rotateOn">On</button></div></div>
+    </div>
+    <div class="info-panel">
+        <h2>Displacement 3D</h2>
+        <p>Transforme l'image 2D en surface 3D réelle en utilisant la depth map comme carte de déplacement géométrique.</p>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="../assets/js/core/image-manager.js"></script>
+    <script src="../assets/js/components/sidebar.js"></script>
+    <script src="../assets/js/components/navigation.js"></script>
+    <script>
+        const container = document.getElementById('canvas-container');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a0f);
+        const getContainerWidth = () => {
+            const sidebarPadding = document.body.classList.contains('sidebar-collapsed') ? 40 : 240;
+            const infoPadding = window.innerWidth > 1400 ? 340 : 20;
+            return window.innerWidth - sidebarPadding - infoPadding;
+        };
+        const camera = new THREE.PerspectiveCamera(50, getContainerWidth() / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0, 2);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(getContainerWidth(), window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(1, 1, 1);
+        scene.add(directionalLight);
+
+        const textureLoader = new THREE.TextureLoader();
+        let mesh, wireframeMesh, autoRotate = true, showWireframe = true;
+        let currentColorTexture, currentDepthTexture;
+
+        async function loadCurrentImage() {
+            const current = window.imageManager.getCurrentImage();
+            if (!current) return;
+            loadingOverlay.classList.remove('hidden');
+
+            try {
+                if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose(); }
+                if (wireframeMesh) { scene.remove(wireframeMesh); wireframeMesh.geometry.dispose(); wireframeMesh.material.dispose(); }
+
+                const [colorTexture, depthTexture] = await Promise.all([
+                    new Promise(r => textureLoader.load(current.originalUrl, r)),
+                    new Promise(r => textureLoader.load(current.depthUrl, r))
+                ]);
+
+                currentColorTexture = colorTexture;
+                currentDepthTexture = depthTexture;
+
+                const aspect = colorTexture.image.width / colorTexture.image.height;
+                const segments = parseInt(document.getElementById('segments').value);
+                const geometry = new THREE.PlaneGeometry(aspect, 1, segments, segments);
+
+                const material = new THREE.ShaderMaterial({
+                    uniforms: { colorMap: { value: colorTexture }, depthMap: { value: depthTexture }, displacementScale: { value: 0.3 } },
+                    vertexShader: `
+                        uniform sampler2D depthMap; uniform float displacementScale;
+                        varying vec2 vUv; varying float vDepth;
+                        void main() {
+                            vUv = uv;
+                            float depth = 1.0 - texture2D(depthMap, uv).r;
+                            vDepth = depth;
+                            vec3 displaced = position;
+                            displaced.z = depth * displacementScale;
+                            gl_Position = projectionMatrix * modelViewMatrix * vec4(displaced, 1.0);
+                        }
+                    `,
+                    fragmentShader: `
+                        uniform sampler2D colorMap;
+                        varying vec2 vUv; varying float vDepth;
+                        void main() {
+                            vec4 color = texture2D(colorMap, vUv);
+                            color.rgb *= 0.8 + vDepth * 0.2;
+                            gl_FragColor = color;
+                        }
+                    `,
+                    side: THREE.DoubleSide
+                });
+
+                mesh = new THREE.Mesh(geometry, material);
+                scene.add(mesh);
+
+                const wireframeMaterial = new THREE.MeshBasicMaterial({ color: 0x00d4ff, wireframe: true, transparent: true, opacity: 0.1 });
+                wireframeMesh = new THREE.Mesh(geometry.clone(), wireframeMaterial);
+                wireframeMesh.visible = showWireframe;
+                scene.add(wireframeMesh);
+                
+                updateMeshDepth();
+            } catch (e) { console.error(e); }
+            loadingOverlay.classList.add('hidden');
+        }
+
+        function updateMeshDepth() {
+            if (!mesh || !currentDepthTexture) return;
+            const scale = document.getElementById('displacement').value / 200;
+            mesh.material.uniforms.displacementScale.value = scale;
+        }
+
+        document.getElementById('displacement').addEventListener('input', (e) => {
+            document.getElementById('displacement-value').textContent = e.target.value;
+            updateMeshDepth();
+        });
+
+        document.getElementById('segments').addEventListener('change', loadCurrentImage);
+        document.getElementById('segments').addEventListener('input', (e) => {
+            document.getElementById('segments-value').textContent = e.target.value;
+        });
+
+        document.getElementById('wireframeOff').addEventListener('click', () => {
+            if (wireframeMesh) wireframeMesh.visible = false;
+            document.getElementById('wireframeOff').classList.add('active');
+            document.getElementById('wireframeOn').classList.remove('active');
+        });
+        document.getElementById('wireframeOn').addEventListener('click', () => {
+            if (wireframeMesh) wireframeMesh.visible = true;
+            document.getElementById('wireframeOn').classList.add('active');
+            document.getElementById('wireframeOff').classList.remove('active');
+        });
+        document.getElementById('rotateOff').addEventListener('click', () => {
+            autoRotate = false;
+            document.getElementById('rotateOff').classList.add('active');
+            document.getElementById('rotateOn').classList.remove('active');
+        });
+        document.getElementById('rotateOn').addEventListener('click', () => {
+            autoRotate = true;
+            document.getElementById('rotateOn').classList.add('active');
+            document.getElementById('rotateOff').classList.remove('active');
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (mesh && autoRotate) {
+                mesh.rotation.y += 0.003;
+                if (wireframeMesh) wireframeMesh.rotation.y = mesh.rotation.y;
+            }
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            const w = getContainerWidth();
+            camera.aspect = w / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, window.innerHeight);
+        });
+
+        window.addEventListener('load', async () => {
+            await window.imageManager.init();
+            new ImageSidebar('image-sidebar', loadCurrentImage);
+            const observer = new MutationObserver(() => {
+                const s = document.querySelector('.sidebar-inner');
+                if (s) {
+                    document.body.classList.toggle('sidebar-collapsed', s.classList.contains('collapsed'));
+                    const w = window.innerWidth - (s.classList.contains('collapsed') ? 40 : 240);
+                    camera.aspect = w / window.innerHeight;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(w, window.innerHeight);
+                }
+            });
+            setTimeout(() => { const s = document.querySelector('.sidebar-inner'); if (s) observer.observe(s, { attributes: true, attributeFilter: ['class'] }); }, 100);
+            await loadCurrentImage();
+        });
+    </script>
+</body>
+</html>

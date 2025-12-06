@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00d4ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff00aa;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="48" fill="#0a0a0f"/>
+  <!-- Depth layers representation -->
+  <ellipse cx="50" cy="55" rx="35" ry="25" fill="url(#grad)" opacity="0.3"/>
+  <ellipse cx="50" cy="50" rx="28" ry="20" fill="url(#grad)" opacity="0.5"/>
+  <ellipse cx="50" cy="45" rx="20" ry="14" fill="url(#grad)" opacity="0.7"/>
+  <ellipse cx="50" cy="40" rx="12" ry="8" fill="url(#grad)" opacity="1"/>
+  <!-- Eye/lens symbol -->
+  <circle cx="50" cy="42" r="4" fill="#0a0a0f"/>
+  <circle cx="50" cy="42" r="2" fill="#00d4ff"/>
+</svg>
+

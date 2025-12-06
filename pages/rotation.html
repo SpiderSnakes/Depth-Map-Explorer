@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rotation 3D Perspective - Depth Map Explorer</title>
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/css/common.css">
+    <link rel="stylesheet" href="../assets/css/effects.css">
+    <style>
+        :root { --bg-primary: #0a0a0f; --accent-amber: #f59e0b; --accent-cyan: #00d4ff; --text-primary: #f0f0f5; --text-secondary: #8888aa; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'JetBrains Mono', monospace; background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; overflow: hidden; }
+        nav { position: fixed; top: 0; left: 0; right: 0; padding: 1rem 2rem; padding-left: 260px; display: flex; justify-content: space-between; z-index: 100; background: linear-gradient(to bottom, var(--bg-primary), transparent); transition: padding-left 0.3s; }
+        body.sidebar-collapsed nav { padding-left: 60px; }
+        nav a { color: var(--text-secondary); text-decoration: none; font-size: 0.85rem; }
+        .nav-title { font-family: 'Playfair Display', serif; font-size: 1.2rem; }
+        #canvas-container { width: 100vw; height: 100vh; padding-left: 240px; padding-right: 340px; transition: padding-left 0.3s, padding-right 0.3s; }
+        body.sidebar-collapsed #canvas-container { padding-left: 40px; }
+        @media (max-width: 1400px) { #canvas-container { padding-right: 20px; } }
+        .loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-primary); display: flex; align-items: center; justify-content: center; z-index: 2000; transition: opacity 0.5s; }
+        .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+        .loader-spinner { width: 50px; height: 50px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--accent-amber); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1rem; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .controls { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); background: rgba(18, 18, 26, 0.9); backdrop-filter: blur(20px); padding: 1.5rem 2rem; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1); display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center; margin-left: 120px; transition: margin-left 0.3s; }
+        body.sidebar-collapsed .controls { margin-left: 20px; }
+        .control-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        .control-group label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; }
+        .control-group input[type="range"] { width: 100px; height: 4px; -webkit-appearance: none; background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
+        .control-group input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; background: var(--accent-amber); border-radius: 50%; cursor: pointer; }
+        .value-display { font-size: 0.8rem; color: var(--accent-amber); text-align: center; }
+        .mode-btns { display: flex; gap: 0.5rem; }
+        .mode-btn { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: var(--text-secondary); padding: 0.4rem 0.8rem; border-radius: 20px; font-size: 0.7rem; cursor: pointer; font-family: inherit; }
+        .mode-btn:hover, .mode-btn.active { background: var(--accent-amber); color: white; }
+        @media (max-width: 768px) { nav { padding-left: 60px !important; } #canvas-container { padding-left: 40px !important; } .controls { margin-left: 20px !important; } }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loadingOverlay"><div class="loader"><div class="loader-spinner"></div><p>Chargement...</p></div></div>
+    <div id="image-sidebar"></div>
+    <div id="canvas-container"></div>
+    <div class="controls">
+        <div class="control-group"><label>Profondeur</label><input type="range" id="depth" min="0" max="100" value="50"><span class="value-display" id="depth-value">50</span></div>
+        <div class="control-group"><label>Sensibilité</label><input type="range" id="sensitivity" min="10" max="100" value="50"><span class="value-display" id="sensitivity-value">50</span></div>
+        <div class="control-group"><label>FOV</label><input type="range" id="fov" min="30" max="120" value="60"><span class="value-display" id="fov-value">60°</span></div>
+        <div class="control-group"><label>Mode</label><div class="mode-btns">
+            <button class="mode-btn active" id="mouseMode">Souris</button>
+            <button class="mode-btn" id="autoMode">Auto</button>
+        </div></div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="../assets/js/core/image-manager.js"></script>
+    <script src="../assets/js/components/sidebar.js"></script>
+    <script src="../assets/js/components/navigation.js"></script>
+    <script>
+        const container = document.getElementById('canvas-container');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a0f);
+        const getContainerWidth = () => {
+            const sidebarPadding = document.body.classList.contains('sidebar-collapsed') ? 40 : 240;
+            const infoPadding = window.innerWidth > 1400 ? 340 : 20;
+            return window.innerWidth - sidebarPadding - infoPadding;
+        };
+        const camera = new THREE.PerspectiveCamera(60, getContainerWidth() / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0, 1.5);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(getContainerWidth(), window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const orbitControls = new THREE.OrbitControls(camera, renderer.domElement);
+        orbitControls.enableDamping = true;
+        orbitControls.enabled = false;
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(1, 1, 1);
+        scene.add(directionalLight);
+
+        let mesh, mode = 'mouse', targetRotation = { x: 0, y: 0 }, autoTime = 0;
+        const textureLoader = new THREE.TextureLoader();
+
+        function loadImageData(url) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width; canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    resolve({ data: ctx.getImageData(0, 0, img.width, img.height), width: img.width, height: img.height });
+                };
+                img.src = url;
+            });
+        }
+
+        async function loadCurrentImage() {
+            const current = window.imageManager.getCurrentImage();
+            if (!current) return;
+            loadingOverlay.classList.remove('hidden');
+
+            try {
+                if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose(); }
+
+                const [colorTexture, depthTexture, depthImg] = await Promise.all([
+                    new Promise(r => textureLoader.load(current.originalUrl, r)),
+                    new Promise(r => textureLoader.load(current.depthUrl, r)),
+                    loadImageData(current.depthUrl)
+                ]);
+
+                const aspect = colorTexture.image.width / colorTexture.image.height;
+                const segments = 128;
+                const geometry = new THREE.PlaneGeometry(aspect, 1, segments, segments);
+                
+                const positions = geometry.attributes.position;
+                const uvs = geometry.attributes.uv;
+                const scale = document.getElementById('depth').value / 200;
+
+                for (let i = 0; i < positions.count; i++) {
+                    const u = uvs.getX(i);
+                    const v = uvs.getY(i);
+                    const px = Math.floor(u * (depthImg.width - 1));
+                    const py = Math.floor((1 - v) * (depthImg.height - 1));
+                    const idx = (py * depthImg.width + px) * 4;
+                    const depth = 1.0 - depthImg.data.data[idx] / 255;
+                    positions.setZ(i, depth * scale);
+                }
+                positions.needsUpdate = true;
+                geometry.computeVertexNormals();
+
+                const material = new THREE.MeshStandardMaterial({ map: colorTexture, side: THREE.DoubleSide, roughness: 0.8 });
+                mesh = new THREE.Mesh(geometry, material);
+                mesh.userData.depthImg = depthImg;
+                scene.add(mesh);
+            } catch (e) { console.error(e); }
+            loadingOverlay.classList.add('hidden');
+        }
+
+        document.addEventListener('mousemove', (e) => {
+            if (mode === 'mouse') {
+                const sensitivity = document.getElementById('sensitivity').value / 100;
+                targetRotation.x = (e.clientY / window.innerHeight - 0.5) * sensitivity * 0.5;
+                targetRotation.y = (e.clientX / window.innerWidth - 0.5) * sensitivity * 0.5;
+            }
+        });
+
+        document.getElementById('mouseMode').addEventListener('click', () => {
+            mode = 'mouse'; orbitControls.enabled = false;
+            document.getElementById('mouseMode').classList.add('active');
+            document.getElementById('autoMode').classList.remove('active');
+        });
+        document.getElementById('autoMode').addEventListener('click', () => {
+            mode = 'auto'; orbitControls.enabled = true;
+            document.getElementById('autoMode').classList.add('active');
+            document.getElementById('mouseMode').classList.remove('active');
+        });
+
+        document.getElementById('depth').addEventListener('input', (e) => {
+            document.getElementById('depth-value').textContent = e.target.value;
+            if (mesh && mesh.userData.depthImg) {
+                const scale = e.target.value / 200;
+                const positions = mesh.geometry.attributes.position;
+                const uvs = mesh.geometry.attributes.uv;
+                const depthImg = mesh.userData.depthImg;
+                for (let i = 0; i < positions.count; i++) {
+                    const u = uvs.getX(i), v = uvs.getY(i);
+                    const px = Math.floor(u * (depthImg.width - 1));
+                    const py = Math.floor((1 - v) * (depthImg.height - 1));
+                    const idx = (py * depthImg.width + px) * 4;
+                    const depth = 1.0 - depthImg.data.data[idx] / 255;
+                    positions.setZ(i, depth * scale);
+                }
+                positions.needsUpdate = true;
+                mesh.geometry.computeVertexNormals();
+            }
+        });
+        document.getElementById('sensitivity').addEventListener('input', (e) => document.getElementById('sensitivity-value').textContent = e.target.value);
+        document.getElementById('fov').addEventListener('input', (e) => {
+            document.getElementById('fov-value').textContent = e.target.value + '°';
+            camera.fov = parseInt(e.target.value);
+            camera.updateProjectionMatrix();
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (mesh) {
+                if (mode === 'auto') {
+                    autoTime += 0.005;
+                    mesh.rotation.y = Math.sin(autoTime) * 0.3;
+                    mesh.rotation.x = Math.sin(autoTime * 0.7) * 0.1;
+                } else {
+                    mesh.rotation.x += (targetRotation.x - mesh.rotation.x) * 0.05;
+                    mesh.rotation.y += (targetRotation.y - mesh.rotation.y) * 0.05;
+                }
+            }
+            orbitControls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            const w = getContainerWidth();
+            camera.aspect = w / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, window.innerHeight);
+        });
+
+        window.addEventListener('load', async () => {
+            await window.imageManager.init();
+            new ImageSidebar('image-sidebar', loadCurrentImage);
+            const observer = new MutationObserver(() => {
+                const s = document.querySelector('.sidebar-inner');
+                if (s) { document.body.classList.toggle('sidebar-collapsed', s.classList.contains('collapsed')); window.dispatchEvent(new Event('resize')); }
+            });
+            setTimeout(() => { const s = document.querySelector('.sidebar-inner'); if (s) observer.observe(s, { attributes: true, attributeFilter: ['class'] }); }, 100);
+            await loadCurrentImage();
+        });
+    </script>
+</body>
+</html>

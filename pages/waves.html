@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vagues & Ondulations - Depth Map Explorer</title>
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/css/common.css">
+    <link rel="stylesheet" href="../assets/css/effects.css">
+    <style>
+        :root { --bg-primary: #0a0a0f; --accent-blue: #3b82f6; --accent-cyan: #00d4ff; --text-primary: #f0f0f5; --text-secondary: #8888aa; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'JetBrains Mono', monospace; background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; }
+        nav { position: fixed; top: 0; left: 0; right: 0; padding: 1rem 2rem; padding-left: 260px; display: flex; justify-content: space-between; align-items: center; z-index: 100; background: linear-gradient(to bottom, var(--bg-primary), transparent); transition: padding-left 0.3s; }
+        body.sidebar-collapsed nav { padding-left: 60px; }
+        nav a { color: var(--text-secondary); text-decoration: none; font-size: 0.85rem; }
+        nav a:hover { color: var(--accent-cyan); }
+        .nav-title { font-family: 'Playfair Display', serif; font-size: 1.2rem; }
+        #canvas-container { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; padding-left: 240px; padding-right: 340px; transition: padding-left 0.3s, padding-right 0.3s; }
+        body.sidebar-collapsed #canvas-container { padding-left: 40px; }
+        canvas { max-width: calc(100vw - 600px); max-height: 75vh; border-radius: 12px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5); }
+        @media (max-width: 1400px) { #canvas-container { padding-right: 20px; } canvas { max-width: calc(100vw - 300px); } }
+        .loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-primary); display: flex; align-items: center; justify-content: center; z-index: 2000; transition: opacity 0.5s; }
+        .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+        .loader { text-align: center; }
+        .loader-spinner { width: 50px; height: 50px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1rem; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .controls { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); background: rgba(18, 18, 26, 0.9); backdrop-filter: blur(20px); padding: 1.5rem 2rem; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1); display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center; margin-left: 120px; transition: margin-left 0.3s; }
+        body.sidebar-collapsed .controls { margin-left: 20px; }
+        .control-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        .control-group label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; }
+        .control-group input[type="range"] { width: 100px; height: 4px; -webkit-appearance: none; background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
+        .control-group input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; background: var(--accent-blue); border-radius: 50%; cursor: pointer; }
+        .value-display { font-size: 0.8rem; color: var(--accent-blue); text-align: center; }
+        .wave-presets { display: flex; gap: 0.5rem; }
+        .preset-btn { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: var(--text-secondary); padding: 0.4rem 0.8rem; border-radius: 20px; font-size: 0.7rem; cursor: pointer; font-family: inherit; }
+        .preset-btn:hover, .preset-btn.active { background: var(--accent-blue); color: white; }
+        .info-panel { position: fixed; top: 5rem; right: 2rem; width: 300px; background: rgba(18, 18, 26, 0.9); backdrop-filter: blur(20px); padding: 1.5rem; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1); }
+        .info-panel h2 { font-family: 'Playfair Display', serif; font-size: 1.3rem; margin-bottom: 1rem; color: var(--accent-blue); }
+        .info-panel p { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.7; }
+        @media (max-width: 1400px) { .info-panel { display: none; } }
+        @media (max-width: 768px) { nav { padding-left: 60px !important; } #canvas-container { padding-left: 40px !important; } .controls { margin-left: 20px !important; } }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loadingOverlay"><div class="loader"><div class="loader-spinner"></div><p>Chargement...</p></div></div>
+    <div id="image-sidebar"></div>
+    <div id="canvas-container"><canvas id="canvas"></canvas></div>
+    <div class="controls">
+        <div class="control-group"><label>Amplitude</label><input type="range" id="amplitude" min="0" max="100" value="30"><span class="value-display" id="amplitude-value">30</span></div>
+        <div class="control-group"><label>Fréquence</label><input type="range" id="frequency" min="1" max="50" value="15"><span class="value-display" id="frequency-value">15</span></div>
+        <div class="control-group"><label>Vitesse</label><input type="range" id="speed" min="1" max="100" value="30"><span class="value-display" id="speed-value">30</span></div>
+        <div class="control-group"><label>Type</label><div class="wave-presets">
+            <button class="preset-btn active" data-preset="0">Océan</button>
+            <button class="preset-btn" data-preset="1">Ondulation</button>
+            <button class="preset-btn" data-preset="2">Pulse</button>
+        </div></div>
+    </div>
+    <div class="info-panel"><h2>Vagues & Ondulations</h2><p>Applique des déformations sinusoïdales à l'image, modulées par la depth map.</p></div>
+    <script src="../assets/js/core/image-manager.js"></script>
+    <script src="../assets/js/components/sidebar.js"></script>
+    <script src="../assets/js/components/navigation.js"></script>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const gl = canvas.getContext('webgl2');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+
+        const vsSource = `#version 300 es
+            in vec4 aPosition; in vec2 aTexCoord; out vec2 vTexCoord;
+            void main() { gl_Position = aPosition; vTexCoord = aTexCoord; }`;
+
+        const fsSource = `#version 300 es
+            precision highp float;
+            in vec2 vTexCoord; out vec4 fragColor;
+            uniform sampler2D uImage, uDepth;
+            uniform float uTime, uAmplitude, uFrequency, uSpeed;
+            uniform int uWaveType;
+            
+            void main() {
+                vec2 uv = vTexCoord;
+                float depth = 1.0 - texture(uDepth, uv).r;
+                vec2 distortion = vec2(0.0);
+                
+                if (uWaveType == 0) {
+                    float wave1 = sin(uv.x * uFrequency + uTime * uSpeed) * uAmplitude;
+                    float wave2 = sin(uv.x * uFrequency * 1.5 + uTime * uSpeed * 0.8) * uAmplitude * 0.5;
+                    distortion.x = (wave1 + wave2) * depth;
+                    distortion.y = cos(uv.y * uFrequency * 0.8 + uTime * uSpeed * 0.6) * uAmplitude * 0.3 * depth;
+                } else if (uWaveType == 1) {
+                    vec2 center = vec2(0.5);
+                    float dist = length(uv - center);
+                    float ripple = sin(dist * uFrequency * 10.0 - uTime * uSpeed * 2.0) * uAmplitude;
+                    vec2 dir = normalize(uv - center + 0.001);
+                    distortion = dir * ripple * depth * 0.5;
+                } else {
+                    vec2 center = vec2(0.5);
+                    float dist = length(uv - center);
+                    float pulse = sin(uTime * uSpeed * 0.5);
+                    float ring = smoothstep(pulse - 0.1, pulse, dist) * smoothstep(pulse + 0.1, pulse, dist);
+                    vec2 dir = normalize(uv - center + 0.001);
+                    distortion = dir * ring * uAmplitude * 2.0 * depth;
+                }
+                
+                vec2 distortedUV = clamp(uv + distortion * 0.02, 0.0, 1.0);
+                vec4 color = texture(uImage, distortedUV);
+                float chromaOffset = length(distortion) * 0.003;
+                color.r = texture(uImage, distortedUV + vec2(chromaOffset, 0.0)).r;
+                color.b = texture(uImage, distortedUV - vec2(chromaOffset, 0.0)).b;
+                fragColor = color;
+            }`;
+
+        function compileShader(gl, source, type) { const s = gl.createShader(type); gl.shaderSource(s, source); gl.compileShader(s); return s; }
+        const program = gl.createProgram();
+        gl.attachShader(program, compileShader(gl, vsSource, gl.VERTEX_SHADER));
+        gl.attachShader(program, compileShader(gl, fsSource, gl.FRAGMENT_SHADER));
+        gl.linkProgram(program); gl.useProgram(program);
+
+        const positions = new Float32Array([-1,-1,0,1, 1,-1,1,1, -1,1,0,0, 1,1,1,0]);
+        const buffer = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buffer); gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+        gl.enableVertexAttribArray(gl.getAttribLocation(program, 'aPosition'));
+        gl.vertexAttribPointer(gl.getAttribLocation(program, 'aPosition'), 2, gl.FLOAT, false, 16, 0);
+        gl.enableVertexAttribArray(gl.getAttribLocation(program, 'aTexCoord'));
+        gl.vertexAttribPointer(gl.getAttribLocation(program, 'aTexCoord'), 2, gl.FLOAT, false, 16, 8);
+
+        const uniforms = { uTime: gl.getUniformLocation(program, 'uTime'), uAmplitude: gl.getUniformLocation(program, 'uAmplitude'), uFrequency: gl.getUniformLocation(program, 'uFrequency'), uSpeed: gl.getUniformLocation(program, 'uSpeed'), uWaveType: gl.getUniformLocation(program, 'uWaveType'), uImage: gl.getUniformLocation(program, 'uImage'), uDepth: gl.getUniformLocation(program, 'uDepth') };
+
+        let imageTexture = null, depthTexture = null, waveType = 0;
+
+        function loadTexture(url, unit) {
+            return new Promise((resolve) => {
+                const texture = gl.createTexture(), image = new Image();
+                image.crossOrigin = 'anonymous';
+                image.onload = () => {
+                    gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, texture);
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                    if (unit === 0) {
+                        const maxW = (window.innerWidth - 280) * 0.7, maxH = window.innerHeight * 0.7;
+                        let w = image.width, h = image.height;
+                        if (w > maxW) { h = h * maxW / w; w = maxW; }
+                        if (h > maxH) { w = w * maxH / h; h = maxH; }
+                        canvas.width = w; canvas.height = h; gl.viewport(0, 0, w, h);
+                    }
+                    resolve(texture);
+                };
+                image.src = url;
+            });
+        }
+
+        async function loadCurrentImage() {
+            const current = window.imageManager.getCurrentImage(); if (!current) return;
+            loadingOverlay.classList.remove('hidden');
+            try {
+                if (imageTexture) gl.deleteTexture(imageTexture);
+                if (depthTexture) gl.deleteTexture(depthTexture);
+                imageTexture = await loadTexture(current.originalUrl, 0);
+                depthTexture = await loadTexture(current.depthUrl, 1);
+                gl.uniform1i(uniforms.uImage, 0); gl.uniform1i(uniforms.uDepth, 1);
+            } catch (e) { console.error(e); }
+            loadingOverlay.classList.add('hidden');
+        }
+
+        const ctrlAmplitude = document.getElementById('amplitude');
+        const ctrlFrequency = document.getElementById('frequency');
+        const ctrlSpeed = document.getElementById('speed');
+        ctrlAmplitude.addEventListener('input', (e) => document.getElementById('amplitude-value').textContent = e.target.value);
+        ctrlFrequency.addEventListener('input', (e) => document.getElementById('frequency-value').textContent = e.target.value);
+        ctrlSpeed.addEventListener('input', (e) => document.getElementById('speed-value').textContent = e.target.value);
+
+        document.querySelectorAll('.preset-btn').forEach((btn, i) => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                waveType = i;
+            });
+        });
+
+        const startTime = Date.now();
+        function render() {
+            gl.uniform1f(uniforms.uTime, (Date.now() - startTime) / 1000);
+            gl.uniform1f(uniforms.uAmplitude, ctrlAmplitude.value / 100);
+            gl.uniform1f(uniforms.uFrequency, ctrlFrequency.value / 5);
+            gl.uniform1f(uniforms.uSpeed, ctrlSpeed.value / 30);
+            gl.uniform1i(uniforms.uWaveType, waveType);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            requestAnimationFrame(render);
+        }
+
+        window.addEventListener('load', async () => {
+            await window.imageManager.init();
+            new ImageSidebar('image-sidebar', loadCurrentImage);
+            const observer = new MutationObserver(() => { const s = document.querySelector('.sidebar-inner'); if (s) document.body.classList.toggle('sidebar-collapsed', s.classList.contains('collapsed')); });
+            setTimeout(() => { const s = document.querySelector('.sidebar-inner'); if (s) observer.observe(s, { attributes: true, attributeFilter: ['class'] }); }, 100);
+            await loadCurrentImage();
+            render();
+        });
+    </script>
+</body>
+</html>

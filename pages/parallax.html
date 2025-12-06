@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parallaxe 3D - Depth Map Explorer</title>
+    <meta name="description" content="Effet de parallaxe 3D interactif utilisant les depth maps">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    
+    <!-- Styles communs -->
+    <link rel="stylesheet" href="../assets/css/common.css">
+    <link rel="stylesheet" href="../assets/css/effects.css">
+</head>
+<body class="effect-page">
+    <!-- Skip link pour accessibilité -->
+    <a href="#main-content" class="skip-link">Aller au contenu principal</a>
+
+    <!-- Loading -->
+    <div class="loading-overlay" id="loadingOverlay" aria-live="polite">
+        <div class="loader">
+            <div class="loader-spinner" aria-hidden="true"></div>
+            <p>Chargement...</p>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div id="image-sidebar"></div>
+
+    <!-- Main Content -->
+    <main id="main-content">
+        <div id="canvas-container">
+            <canvas id="canvas" aria-label="Effet parallaxe 3D interactif"></canvas>
+        </div>
+    </main>
+
+    <!-- Controls -->
+    <div class="controls" role="group" aria-label="Paramètres de l'effet">
+        <div class="control-group">
+            <label for="intensity">Intensité</label>
+            <input type="range" id="intensity" min="0" max="100" value="50" aria-describedby="intensity-value">
+            <span class="value-display" id="intensity-value" aria-live="polite">50</span>
+        </div>
+        <div class="control-group">
+            <label for="zScale">Échelle Z</label>
+            <input type="range" id="zScale" min="0" max="100" value="30" aria-describedby="zScale-value">
+            <span class="value-display" id="zScale-value" aria-live="polite">30</span>
+        </div>
+        <div class="control-group">
+            <label for="smoothing">Lissage</label>
+            <input type="range" id="smoothing" min="1" max="20" value="10" aria-describedby="smoothing-value">
+            <span class="value-display" id="smoothing-value" aria-live="polite">10</span>
+        </div>
+    </div>
+
+    <!-- Info Panel -->
+    <aside class="info-panel" aria-labelledby="info-title">
+        <h2 id="info-title">Parallaxe 3D</h2>
+        <p>
+            Cet effet crée une illusion de profondeur en déplaçant chaque pixel
+            proportionnellement à sa valeur dans la depth map lorsque vous bougez la souris.
+        </p>
+
+        <h3>🔧 Technique</h3>
+        <p>
+            Le shader GLSL lit la valeur de luminosité de la depth map pour chaque pixel.
+            Cette valeur (0-1) détermine l'amplitude du déplacement appliqué aux coordonnées UV.
+        </p>
+        <code>vec2 offset = (mousePos - 0.5) * depth * intensity;
+vec2 newUV = uv + offset;</code>
+
+        <h3>🛠️ Technologies</h3>
+        <ul>
+            <li><strong>WebGL 2.0</strong> — Rendu GPU haute performance</li>
+            <li><strong>GLSL</strong> — Fragment shader pour le traitement parallèle</li>
+            <li><strong>JavaScript</strong> — Gestion des événements souris</li>
+        </ul>
+
+        <h3>💡 Applications</h3>
+        <ul>
+            <li><strong>Portfolios créatifs</strong> — Images de héros interactives</li>
+            <li><strong>E-commerce</strong> — Présentation produits immersive</li>
+            <li><strong>Storytelling</strong> — Articles et présentations visuelles</li>
+            <li><strong>Gaming</strong> — Menus et écrans de chargement</li>
+        </ul>
+    </aside>
+
+    <!-- Scripts -->
+    <script src="../assets/js/core/webgl-utils.js"></script>
+    <script src="../assets/js/core/image-manager.js"></script>
+    <script src="../assets/js/components/sidebar.js"></script>
+    <script src="../assets/js/components/navigation.js"></script>
+    <script src="../assets/js/core/effect-init.js"></script>
+    
+    <script>
+        // Configuration
+        const canvas = document.getElementById('canvas');
+        let gl, resourceManager, program, uniforms;
+        let inputTracker, animationLoop;
+
+        // Shaders
+        const vertexShaderSource = `#version 300 es
+            in vec4 aPosition;
+            in vec2 aTexCoord;
+            out vec2 vTexCoord;
+            void main() {
+                gl_Position = vec4(aPosition.xy, 0.0, 1.0);
+                vTexCoord = aTexCoord;
+            }
+        `;
+
+        const fragmentShaderSource = `#version 300 es
+            precision highp float;
+            
+            in vec2 vTexCoord;
+            out vec4 fragColor;
+            
+            uniform sampler2D uImage;
+            uniform sampler2D uDepth;
+            uniform vec2 uMouse;
+            uniform float uIntensity;
+            uniform float uZScale;
+            
+            void main() {
+                vec2 uv = vTexCoord;
+                float depth = 1.0 - texture(uDepth, uv).r;
+                vec2 mouseOffset = (uMouse - 0.5) * 2.0;
+                float displacement = depth * uIntensity * uZScale;
+                vec2 offset = mouseOffset * displacement;
+                vec2 newUV = clamp(uv + offset, 0.0, 1.0);
+                vec4 color = texture(uImage, newUV);
+                
+                // Vignette subtle
+                float vignette = 1.0 - length(uv - 0.5) * 0.4;
+                color.rgb *= vignette;
+                
+                fragColor = color;
+            }
+        `;
+
+        // Initialisation WebGL
+        function initWebGL() {
+            gl = createWebGLContext(canvas);
+            resourceManager = new WebGLResourceManager(gl);
+
+            // Créer le programme shader
+            const programData = resourceManager.createProgram(
+                vertexShaderSource,
+                fragmentShaderSource,
+                'parallax'
+            );
+            program = programData.program;
+            gl.useProgram(program);
+
+            // Créer le quad fullscreen
+            resourceManager.createFullscreenQuad();
+
+            // Configurer les attributs
+            resourceManager.setupVertexAttributes(programData, {
+                aPosition: { size: 2, stride: 16, offset: 0 },
+                aTexCoord: { size: 2, stride: 16, offset: 8 }
+            });
+
+            // Récupérer les uniforms
+            uniforms = resourceManager.getUniformLocations(programData, [
+                'uMouse', 'uIntensity', 'uZScale', 'uImage', 'uDepth'
+            ]);
+
+            // Configurer les unités de texture
+            gl.uniform1i(uniforms.uImage, 0);
+            gl.uniform1i(uniforms.uDepth, 1);
+        }
+
+        // Chargement d'image
+        async function loadImage(currentImage) {
+            if (!currentImage || !gl) return;
+
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            loadingOverlay.classList.remove('hidden');
+
+            try {
+                const { imageTexture, depthTexture } = await loadEffectTextures(
+                    resourceManager, 
+                    currentImage
+                );
+
+                // Redimensionner le canvas
+                resizeCanvas(canvas, gl, imageTexture.width, imageTexture.height);
+
+            } catch (error) {
+                console.error('Erreur chargement image:', error);
+            }
+
+            loadingOverlay.classList.add('hidden');
+        }
+
+        // Rendu
+        function render(deltaTime) {
+            if (!gl) return;
+
+            inputTracker.update();
+            const pos = inputTracker.getPosition();
+
+            gl.uniform2f(uniforms.uMouse, pos.x, 1.0 - pos.y);
+            gl.uniform1f(uniforms.uIntensity, intensitySlider.value / 1000);
+            gl.uniform1f(uniforms.uZScale, zScaleSlider.value / 100);
+
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        }
+
+        // Contrôles
+        const intensitySlider = document.getElementById('intensity');
+        const zScaleSlider = document.getElementById('zScale');
+        const smoothingSlider = document.getElementById('smoothing');
+
+        intensitySlider.addEventListener('input', (e) => {
+            document.getElementById('intensity-value').textContent = e.target.value;
+        });
+
+        zScaleSlider.addEventListener('input', (e) => {
+            document.getElementById('zScale-value').textContent = e.target.value;
+        });
+
+        smoothingSlider.addEventListener('input', (e) => {
+            document.getElementById('smoothing-value').textContent = e.target.value;
+            if (inputTracker) {
+                inputTracker.setSmoothing(e.target.value / 100);
+            }
+        });
+
+        // Initialisation
+        window.addEventListener('load', async () => {
+            initWebGL();
+
+            inputTracker = new InputTracker({ smoothing: 0.1 });
+            animationLoop = new AnimationLoop(render);
+
+            await initEffectPage({
+                onImageChange: loadImage,
+                canvas,
+                gl
+            });
+
+            animationLoop.start();
+        });
+
+        // Gestion du resize
+        window.addEventListener('resize', () => {
+            const currentImage = window.imageManager.getCurrentImage();
+            if (currentImage && resourceManager) {
+                // Recharger les textures pour recalculer la taille
+                const cached = resourceManager.textures.get(`${currentImage.originalUrl}_0`);
+                if (cached) {
+                    resizeCanvas(canvas, gl, cached.width, cached.height);
+                }
+            }
+        });
+
+        // Nettoyage
+        window.addEventListener('beforeunload', () => {
+            if (animationLoop) animationLoop.stop();
+            if (resourceManager) resourceManager.dispose();
+        });
+    </script>
+</body>
+</html>

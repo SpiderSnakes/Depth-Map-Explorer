@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Glitch Profondeur - Depth Map Explorer</title>
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/css/common.css">
+    <link rel="stylesheet" href="../assets/css/effects.css">
+    <style>
+        :root { --bg-primary: #0a0a0f; --accent-red: #ef4444; --accent-cyan: #00d4ff; --text-primary: #f0f0f5; --text-secondary: #8888aa; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'JetBrains Mono', monospace; background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; }
+        nav { position: fixed; top: 0; left: 0; right: 0; padding: 1rem 2rem; padding-left: 260px; display: flex; justify-content: space-between; z-index: 100; background: linear-gradient(to bottom, var(--bg-primary), transparent); transition: padding-left 0.3s; }
+        body.sidebar-collapsed nav { padding-left: 60px; }
+        nav a { color: var(--text-secondary); text-decoration: none; font-size: 0.85rem; }
+        .nav-title { font-family: 'Playfair Display', serif; font-size: 1.2rem; }
+        #canvas-container { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; padding-left: 240px; padding-right: 340px; transition: padding-left 0.3s, padding-right 0.3s; }
+        body.sidebar-collapsed #canvas-container { padding-left: 40px; }
+        canvas { max-width: calc(100vw - 600px); max-height: 75vh; border-radius: 12px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5); }
+        @media (max-width: 1400px) { #canvas-container { padding-right: 20px; } canvas { max-width: calc(100vw - 300px); } }
+        .loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-primary); display: flex; align-items: center; justify-content: center; z-index: 2000; transition: opacity 0.5s; }
+        .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+        .loader-spinner { width: 50px; height: 50px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--accent-red); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1rem; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .glitch-indicator { position: fixed; top: 5rem; left: 260px; padding: 0.5rem 1rem; background: rgba(239,68,68,0.2); border: 1px solid var(--accent-red); border-radius: 8px; font-size: 0.75rem; color: var(--accent-red); animation: glitchPulse 2s infinite; transition: left 0.3s; }
+        body.sidebar-collapsed .glitch-indicator { left: 60px; }
+        @keyframes glitchPulse { 0%,90%,100% { opacity: 1; } 92%,98% { opacity: 0.5; } }
+        .controls { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); background: rgba(18, 18, 26, 0.9); backdrop-filter: blur(20px); padding: 1.5rem 2rem; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1); display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center; margin-left: 120px; transition: margin-left 0.3s; }
+        body.sidebar-collapsed .controls { margin-left: 20px; }
+        .control-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        .control-group label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; }
+        .control-group input[type="range"] { width: 100px; height: 4px; -webkit-appearance: none; background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
+        .control-group input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; background: var(--accent-red); border-radius: 50%; cursor: pointer; }
+        .value-display { font-size: 0.8rem; color: var(--accent-red); text-align: center; }
+        .mode-btns { display: flex; gap: 0.5rem; }
+        .mode-btn { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: var(--text-secondary); padding: 0.4rem 0.8rem; border-radius: 20px; font-size: 0.7rem; cursor: pointer; font-family: inherit; }
+        .mode-btn:hover, .mode-btn.active { background: var(--accent-red); color: white; }
+        @media (max-width: 768px) { nav, .glitch-indicator { padding-left: 60px !important; left: 60px !important; } #canvas-container { padding-left: 40px !important; } .controls { margin-left: 20px !important; } }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loadingOverlay"><div class="loader"><div class="loader-spinner"></div><p>Chargement...</p></div></div>
+    <div class="glitch-indicator">⚡ GLITCH ACTIF</div>
+    <div id="image-sidebar"></div>
+    <div id="canvas-container"><canvas id="canvas"></canvas></div>
+    <div class="controls">
+        <div class="control-group"><label>Intensité</label><input type="range" id="intensity" min="0" max="100" value="50"><span class="value-display" id="intensity-value">50</span></div>
+        <div class="control-group"><label>Fréquence</label><input type="range" id="frequency" min="1" max="100" value="30"><span class="value-display" id="frequency-value">30</span></div>
+        <div class="control-group"><label>Seuil</label><input type="range" id="depthThreshold" min="0" max="100" value="50"><span class="value-display" id="depthThreshold-value">50%</span></div>
+        <div class="control-group"><label>Type</label><div class="mode-btns">
+            <button class="mode-btn active" data-mode="0">Slice</button>
+            <button class="mode-btn" data-mode="1">RGB</button>
+            <button class="mode-btn" data-mode="2">Noise</button>
+        </div></div>
+        <div class="control-group"><label>Zone</label><div class="mode-btns">
+            <button class="mode-btn active" data-zone="0">Proche</button>
+            <button class="mode-btn" data-zone="1">Loin</button>
+            <button class="mode-btn" data-zone="2">Tout</button>
+        </div></div>
+    </div>
+    <script src="../assets/js/core/image-manager.js"></script>
+    <script src="../assets/js/components/sidebar.js"></script>
+    <script src="../assets/js/components/navigation.js"></script>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const gl = canvas.getContext('webgl2');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+
+        const vsSource = `#version 300 es
+            in vec4 aPosition; in vec2 aTexCoord; out vec2 vTexCoord;
+            void main() { gl_Position = aPosition; vTexCoord = aTexCoord; }`;
+
+        const fsSource = `#version 300 es
+            precision highp float;
+            in vec2 vTexCoord; out vec4 fragColor;
+            uniform sampler2D uImage, uDepth;
+            uniform float uIntensity, uFrequency, uDepthThreshold, uTime;
+            uniform int uGlitchType, uZoneType;
+            
+            float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+            
+            void main() {
+                vec2 uv = vTexCoord;
+                float depth = 1.0 - texture(uDepth, uv).r;
+                bool shouldGlitch = uZoneType == 2 || (uZoneType == 0 ? depth > uDepthThreshold : depth < uDepthThreshold);
+                float glitchTime = floor(uTime * uFrequency);
+                float glitchRandom = hash(vec2(glitchTime, floor(uv.y * 20.0)));
+                float glitchActive = step(0.7, glitchRandom);
+                vec2 glitchUV = uv;
+                vec4 color;
+                
+                if (shouldGlitch && glitchActive > 0.5) {
+                    float intensity = uIntensity * 0.1;
+                    if (uGlitchType == 0) {
+                        float sliceY = floor(uv.y * 30.0) / 30.0;
+                        float sliceRandom = hash(vec2(sliceY, glitchTime));
+                        if (sliceRandom > 0.7) glitchUV.x += (sliceRandom - 0.5) * intensity * depth;
+                        color = texture(uImage, glitchUV);
+                    } else if (uGlitchType == 1) {
+                        float splitAmount = intensity * depth * 2.0;
+                        float splitDir = hash(vec2(glitchTime, 0.0)) * 6.28;
+                        vec2 rOffset = vec2(cos(splitDir), sin(splitDir)) * splitAmount;
+                        vec2 bOffset = vec2(cos(splitDir + 2.0), sin(splitDir + 2.0)) * splitAmount;
+                        color = vec4(texture(uImage, uv + rOffset).r, texture(uImage, uv).g, texture(uImage, uv + bOffset).b, 1.0);
+                    } else {
+                        float noiseVal = hash(uv * 100.0 + glitchTime * 10.0);
+                        if (noiseVal > 0.6) glitchUV = floor(uv / (vec2(0.02) * intensity)) * (vec2(0.02) * intensity);
+                        color = texture(uImage, glitchUV);
+                        color.rgb += vec3(hash(uv * 1000.0 + glitchTime) * intensity * depth * 0.5);
+                    }
+                } else { color = texture(uImage, uv); }
+                
+                color.rgb *= sin(uv.y * 400.0 + uTime * 10.0) * 0.02 + 1.0;
+                color.rgb *= 1.0 - pow(length(uv - 0.5) * 1.2, 2.0);
+                fragColor = color;
+            }`;
+
+        function compileShader(gl, source, type) { const s = gl.createShader(type); gl.shaderSource(s, source); gl.compileShader(s); return s; }
+        const program = gl.createProgram();
+        gl.attachShader(program, compileShader(gl, vsSource, gl.VERTEX_SHADER));
+        gl.attachShader(program, compileShader(gl, fsSource, gl.FRAGMENT_SHADER));
+        gl.linkProgram(program); gl.useProgram(program);
+
+        const positions = new Float32Array([-1,-1,0,1, 1,-1,1,1, -1,1,0,0, 1,1,1,0]);
+        const buffer = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buffer); gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+        gl.enableVertexAttribArray(gl.getAttribLocation(program, 'aPosition'));
+        gl.vertexAttribPointer(gl.getAttribLocation(program, 'aPosition'), 2, gl.FLOAT, false, 16, 0);
+        gl.enableVertexAttribArray(gl.getAttribLocation(program, 'aTexCoord'));
+        gl.vertexAttribPointer(gl.getAttribLocation(program, 'aTexCoord'), 2, gl.FLOAT, false, 16, 8);
+
+        const uniforms = { uIntensity: gl.getUniformLocation(program, 'uIntensity'), uFrequency: gl.getUniformLocation(program, 'uFrequency'), uDepthThreshold: gl.getUniformLocation(program, 'uDepthThreshold'), uGlitchType: gl.getUniformLocation(program, 'uGlitchType'), uZoneType: gl.getUniformLocation(program, 'uZoneType'), uTime: gl.getUniformLocation(program, 'uTime'), uImage: gl.getUniformLocation(program, 'uImage'), uDepth: gl.getUniformLocation(program, 'uDepth') };
+
+        let imageTexture = null, depthTexture = null, glitchType = 0, zoneType = 0;
+
+        function loadTexture(url, unit) {
+            return new Promise((resolve) => {
+                const texture = gl.createTexture(), image = new Image();
+                image.crossOrigin = 'anonymous';
+                image.onload = () => {
+                    gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, texture);
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                    if (unit === 0) {
+                        const maxW = (window.innerWidth - 280) * 0.7, maxH = window.innerHeight * 0.7;
+                        let w = image.width, h = image.height;
+                        if (w > maxW) { h = h * maxW / w; w = maxW; }
+                        if (h > maxH) { w = w * maxH / h; h = maxH; }
+                        canvas.width = w; canvas.height = h; gl.viewport(0, 0, w, h);
+                    }
+                    resolve(texture);
+                };
+                image.src = url;
+            });
+        }
+
+        async function loadCurrentImage() {
+            const current = window.imageManager.getCurrentImage(); if (!current) return;
+            loadingOverlay.classList.remove('hidden');
+            try {
+                if (imageTexture) gl.deleteTexture(imageTexture);
+                if (depthTexture) gl.deleteTexture(depthTexture);
+                imageTexture = await loadTexture(current.originalUrl, 0);
+                depthTexture = await loadTexture(current.depthUrl, 1);
+                gl.uniform1i(uniforms.uImage, 0); gl.uniform1i(uniforms.uDepth, 1);
+            } catch (e) { console.error(e); }
+            loadingOverlay.classList.add('hidden');
+        }
+
+        const ctrlIntensity = document.getElementById('intensity');
+        const ctrlFrequency = document.getElementById('frequency');
+        const ctrlDepthThreshold = document.getElementById('depthThreshold');
+        ctrlIntensity.addEventListener('input', (e) => document.getElementById('intensity-value').textContent = e.target.value);
+        ctrlFrequency.addEventListener('input', (e) => document.getElementById('frequency-value').textContent = e.target.value);
+        ctrlDepthThreshold.addEventListener('input', (e) => document.getElementById('depthThreshold-value').textContent = e.target.value + '%');
+
+        document.querySelectorAll('[data-mode]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                glitchType = parseInt(btn.dataset.mode);
+            });
+        });
+        document.querySelectorAll('[data-zone]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('[data-zone]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                zoneType = parseInt(btn.dataset.zone);
+            });
+        });
+
+        const startTime = Date.now();
+        function render() {
+            gl.uniform1f(uniforms.uIntensity, ctrlIntensity.value / 100);
+            gl.uniform1f(uniforms.uFrequency, ctrlFrequency.value / 10);
+            gl.uniform1f(uniforms.uDepthThreshold, ctrlDepthThreshold.value / 100);
+            gl.uniform1i(uniforms.uGlitchType, glitchType);
+            gl.uniform1i(uniforms.uZoneType, zoneType);
+            gl.uniform1f(uniforms.uTime, (Date.now() - startTime) / 1000);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            requestAnimationFrame(render);
+        }
+
+        window.addEventListener('load', async () => {
+            await window.imageManager.init();
+            new ImageSidebar('image-sidebar', loadCurrentImage);
+            const observer = new MutationObserver(() => { const s = document.querySelector('.sidebar-inner'); if (s) document.body.classList.toggle('sidebar-collapsed', s.classList.contains('collapsed')); });
+            setTimeout(() => { const s = document.querySelector('.sidebar-inner'); if (s) observer.observe(s, { attributes: true, attributeFilter: ['class'] }); }, 100);
+            await loadCurrentImage();
+            render();
+        });
+    </script>
+</body>
+</html>

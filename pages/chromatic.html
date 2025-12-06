@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aberration Chromatique - Depth Map Explorer</title>
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/css/common.css">
+    <link rel="stylesheet" href="../assets/css/effects.css">
+    <style>
+        :root { --bg-primary: #0a0a0f; --accent-violet: #8b5cf6; --accent-cyan: #00d4ff; --text-primary: #f0f0f5; --text-secondary: #8888aa; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'JetBrains Mono', monospace; background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; }
+        nav { position: fixed; top: 0; left: 0; right: 0; padding: 1rem 2rem; padding-left: 260px; display: flex; justify-content: space-between; z-index: 100; background: linear-gradient(to bottom, var(--bg-primary), transparent); transition: padding-left 0.3s; }
+        body.sidebar-collapsed nav { padding-left: 60px; }
+        nav a { color: var(--text-secondary); text-decoration: none; font-size: 0.85rem; }
+        .nav-title { font-family: 'Playfair Display', serif; font-size: 1.2rem; }
+        #canvas-container { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; padding-left: 240px; padding-right: 340px; transition: padding-left 0.3s, padding-right 0.3s; }
+        body.sidebar-collapsed #canvas-container { padding-left: 40px; }
+        canvas { max-width: calc(100vw - 600px); max-height: 75vh; border-radius: 12px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5); }
+        @media (max-width: 1400px) { #canvas-container { padding-right: 20px; } canvas { max-width: calc(100vw - 300px); } }
+        .loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-primary); display: flex; align-items: center; justify-content: center; z-index: 2000; transition: opacity 0.5s; }
+        .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+        .loader-spinner { width: 50px; height: 50px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--accent-violet); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1rem; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .controls { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); background: rgba(18, 18, 26, 0.9); backdrop-filter: blur(20px); padding: 1.5rem 2rem; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1); display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center; margin-left: 120px; transition: margin-left 0.3s; }
+        body.sidebar-collapsed .controls { margin-left: 20px; }
+        .control-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        .control-group label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; }
+        .control-group input[type="range"] { width: 100px; height: 4px; -webkit-appearance: none; background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
+        .control-group input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; background: var(--accent-violet); border-radius: 50%; cursor: pointer; }
+        .value-display { font-size: 0.8rem; color: var(--accent-violet); text-align: center; }
+        .mode-btns { display: flex; gap: 0.5rem; }
+        .mode-btn { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: var(--text-secondary); padding: 0.4rem 0.8rem; border-radius: 20px; font-size: 0.7rem; cursor: pointer; font-family: inherit; }
+        .mode-btn:hover, .mode-btn.active { background: var(--accent-violet); color: white; }
+        @media (max-width: 768px) { nav { padding-left: 60px !important; } #canvas-container { padding-left: 40px !important; } .controls { margin-left: 20px !important; } }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loadingOverlay"><div class="loader"><div class="loader-spinner"></div><p>Chargement...</p></div></div>
+    <div id="image-sidebar"></div>
+    <div id="canvas-container"><canvas id="canvas"></canvas></div>
+    <div class="controls">
+        <div class="control-group"><label>Intensité</label><input type="range" id="intensity" min="0" max="100" value="50"><span class="value-display" id="intensity-value">50</span></div>
+        <div class="control-group"><label>Profondeur</label><input type="range" id="depthScale" min="0" max="100" value="70"><span class="value-display" id="depthScale-value">70</span></div>
+        <div class="control-group"><label>Angle</label><input type="range" id="angle" min="0" max="360" value="0"><span class="value-display" id="angle-value">0°</span></div>
+        <div class="control-group"><label>Mode</label><div class="mode-btns">
+            <button class="mode-btn active" data-mode="0">Radial</button>
+            <button class="mode-btn" data-mode="1">Linéaire</button>
+            <button class="mode-btn" data-mode="2">Spiral</button>
+        </div></div>
+        <div class="control-group"><label>Animation</label><div class="mode-btns"><button class="mode-btn" id="animateBtn">▶ Animer</button></div></div>
+    </div>
+    <script src="../assets/js/core/image-manager.js"></script>
+    <script src="../assets/js/components/sidebar.js"></script>
+    <script src="../assets/js/components/navigation.js"></script>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const gl = canvas.getContext('webgl2');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+
+        const vsSource = `#version 300 es
+            in vec4 aPosition; in vec2 aTexCoord; out vec2 vTexCoord;
+            void main() { gl_Position = aPosition; vTexCoord = aTexCoord; }`;
+
+        const fsSource = `#version 300 es
+            precision highp float;
+            in vec2 vTexCoord; out vec4 fragColor;
+            uniform sampler2D uImage, uDepth;
+            uniform float uIntensity, uDepthScale, uAngle, uTime;
+            uniform int uMode;
+            uniform bool uAnimate;
+            
+            void main() {
+                vec2 uv = vTexCoord;
+                vec2 center = vec2(0.5);
+                float depth = 1.0 - texture(uDepth, uv).r;
+                depth = pow(depth, uDepthScale);
+                vec2 offset;
+                float angle = uAngle * 3.14159 / 180.0;
+                if (uAnimate) angle += uTime;
+                if (uMode == 0) offset = normalize(uv - center) * uIntensity * depth;
+                else if (uMode == 1) offset = vec2(cos(angle), sin(angle)) * uIntensity * depth;
+                else { float dist = length(uv - center); float spiralAngle = angle + dist * 10.0 + (uAnimate ? uTime * 2.0 : 0.0); offset = vec2(cos(spiralAngle), sin(spiralAngle)) * uIntensity * depth; }
+                offset *= 0.05;
+                float r = texture(uImage, uv + offset).r;
+                float g = texture(uImage, uv).g;
+                float b = texture(uImage, uv - offset).b;
+                vec3 color = vec3(r, g, b);
+                color *= 1.0 - length(uv - center) * 0.3;
+                fragColor = vec4(color, 1.0);
+            }`;
+
+        function compileShader(gl, source, type) { const s = gl.createShader(type); gl.shaderSource(s, source); gl.compileShader(s); return s; }
+        const program = gl.createProgram();
+        gl.attachShader(program, compileShader(gl, vsSource, gl.VERTEX_SHADER));
+        gl.attachShader(program, compileShader(gl, fsSource, gl.FRAGMENT_SHADER));
+        gl.linkProgram(program); gl.useProgram(program);
+
+        const positions = new Float32Array([-1,-1,0,1, 1,-1,1,1, -1,1,0,0, 1,1,1,0]);
+        const buffer = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buffer); gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+        gl.enableVertexAttribArray(gl.getAttribLocation(program, 'aPosition'));
+        gl.vertexAttribPointer(gl.getAttribLocation(program, 'aPosition'), 2, gl.FLOAT, false, 16, 0);
+        gl.enableVertexAttribArray(gl.getAttribLocation(program, 'aTexCoord'));
+        gl.vertexAttribPointer(gl.getAttribLocation(program, 'aTexCoord'), 2, gl.FLOAT, false, 16, 8);
+
+        const uniforms = { uIntensity: gl.getUniformLocation(program, 'uIntensity'), uDepthScale: gl.getUniformLocation(program, 'uDepthScale'), uAngle: gl.getUniformLocation(program, 'uAngle'), uMode: gl.getUniformLocation(program, 'uMode'), uTime: gl.getUniformLocation(program, 'uTime'), uAnimate: gl.getUniformLocation(program, 'uAnimate'), uImage: gl.getUniformLocation(program, 'uImage'), uDepth: gl.getUniformLocation(program, 'uDepth') };
+
+        let imageTexture = null, depthTexture = null, mode = 0, animate = false;
+
+        function loadTexture(url, unit) {
+            return new Promise((resolve) => {
+                const texture = gl.createTexture(), image = new Image();
+                image.crossOrigin = 'anonymous';
+                image.onload = () => {
+                    gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, texture);
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                    if (unit === 0) {
+                        const maxW = (window.innerWidth - 280) * 0.7, maxH = window.innerHeight * 0.7;
+                        let w = image.width, h = image.height;
+                        if (w > maxW) { h = h * maxW / w; w = maxW; }
+                        if (h > maxH) { w = w * maxH / h; h = maxH; }
+                        canvas.width = w; canvas.height = h; gl.viewport(0, 0, w, h);
+                    }
+                    resolve(texture);
+                };
+                image.src = url;
+            });
+        }
+
+        async function loadCurrentImage() {
+            const current = window.imageManager.getCurrentImage(); if (!current) return;
+            loadingOverlay.classList.remove('hidden');
+            try {
+                if (imageTexture) gl.deleteTexture(imageTexture);
+                if (depthTexture) gl.deleteTexture(depthTexture);
+                imageTexture = await loadTexture(current.originalUrl, 0);
+                depthTexture = await loadTexture(current.depthUrl, 1);
+                gl.uniform1i(uniforms.uImage, 0); gl.uniform1i(uniforms.uDepth, 1);
+            } catch (e) { console.error(e); }
+            loadingOverlay.classList.add('hidden');
+        }
+
+        const ctrlIntensity = document.getElementById('intensity');
+        const ctrlDepthScale = document.getElementById('depthScale');
+        const ctrlAngle = document.getElementById('angle');
+        ctrlIntensity.addEventListener('input', (e) => document.getElementById('intensity-value').textContent = e.target.value);
+        ctrlDepthScale.addEventListener('input', (e) => document.getElementById('depthScale-value').textContent = e.target.value);
+        ctrlAngle.addEventListener('input', (e) => document.getElementById('angle-value').textContent = e.target.value + '°');
+
+        document.querySelectorAll('[data-mode]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                mode = parseInt(btn.dataset.mode);
+            });
+        });
+
+        document.getElementById('animateBtn').addEventListener('click', function() {
+            animate = !animate;
+            this.textContent = animate ? '⏹ Stop' : '▶ Animer';
+            this.classList.toggle('active', animate);
+        });
+
+        const startTime = Date.now();
+        function render() {
+            gl.uniform1f(uniforms.uIntensity, ctrlIntensity.value / 100);
+            gl.uniform1f(uniforms.uDepthScale, ctrlDepthScale.value / 50);
+            gl.uniform1f(uniforms.uAngle, parseFloat(ctrlAngle.value));
+            gl.uniform1i(uniforms.uMode, mode);
+            gl.uniform1f(uniforms.uTime, (Date.now() - startTime) / 1000);
+            gl.uniform1i(uniforms.uAnimate, animate ? 1 : 0);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            requestAnimationFrame(render);
+        }
+
+        window.addEventListener('load', async () => {
+            await window.imageManager.init();
+            new ImageSidebar('image-sidebar', loadCurrentImage);
+            const observer = new MutationObserver(() => { const s = document.querySelector('.sidebar-inner'); if (s) document.body.classList.toggle('sidebar-collapsed', s.classList.contains('collapsed')); });
+            setTimeout(() => { const s = document.querySelector('.sidebar-inner'); if (s) observer.observe(s, { attributes: true, attributeFilter: ['class'] }); }, 100);
+            await loadCurrentImage();
+            render();
+        });
+    </script>
+</body>
+</html>

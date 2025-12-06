@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload d'Image - Depth Map Explorer</title>
+    <meta name="description" content="Uploadez vos images et générez des depth maps haute qualité avec MiDaS">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    
+    <!-- Common Styles -->
+    <link rel="stylesheet" href="../assets/css/common.css">
+    
+    <style>
+        /* Upload page specific styles */
+        .bg-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(ellipse at 30% 20%, rgba(0, 212, 255, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 80%, rgba(255, 0, 170, 0.08) 0%, transparent 50%);
+            z-index: -1;
+        }
+
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+            background: linear-gradient(to bottom, var(--bg-primary), transparent);
+        }
+
+        nav a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: color var(--transition-fast);
+        }
+
+        nav a:hover { color: var(--accent-cyan); }
+
+        .nav-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.2rem;
+            color: var(--text-primary);
+        }
+
+        main {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 6rem 2rem 2rem;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .page-header h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .page-header p {
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        /* Model Info */
+        .model-info {
+            background: rgba(0, 212, 255, 0.1);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: var(--radius-md);
+            padding: 1rem 1.5rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .model-info-icon {
+            font-size: 1.5rem;
+        }
+
+        .model-info-text {
+            flex: 1;
+        }
+
+        .model-info-text strong {
+            color: var(--accent-cyan);
+        }
+
+        .model-info-text p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        /* Mode selector */
+        .mode-selector {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .mode-btn {
+            flex: 1;
+            min-width: 200px;
+            max-width: 280px;
+            padding: 1.5rem;
+            background: var(--bg-secondary);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-lg);
+            cursor: pointer;
+            transition: all var(--transition-normal);
+            text-align: center;
+        }
+
+        .mode-btn:hover {
+            border-color: rgba(0, 212, 255, 0.3);
+            transform: translateY(-3px);
+        }
+
+        .mode-btn:focus-visible {
+            outline: 2px solid var(--accent-cyan);
+            outline-offset: 2px;
+        }
+
+        .mode-btn.active {
+            border-color: var(--accent-cyan);
+            background: rgba(0, 212, 255, 0.1);
+        }
+
+        .mode-btn .icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .mode-btn h3 {
+            font-size: 1rem;
+            color: var(--text-primary);
+            margin-bottom: 0.3rem;
+        }
+
+        .mode-btn p {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .mode-btn.active h3 {
+            color: var(--accent-cyan);
+        }
+
+        /* Upload container */
+        .upload-container {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-xl);
+            padding: 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .upload-zone {
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            border-radius: var(--radius-lg);
+            padding: 3rem 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+            margin-bottom: 1.5rem;
+        }
+
+        .upload-zone:hover,
+        .upload-zone.dragover {
+            border-color: var(--accent-cyan);
+            background: rgba(0, 212, 255, 0.05);
+        }
+
+        .upload-zone:focus-within {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.2);
+        }
+
+        .upload-zone .icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .upload-zone h4 {
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-zone p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .upload-zone input {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+        }
+
+        /* Preview */
+        .preview-container {
+            display: none;
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .preview-container.active {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .preview-box {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .preview-box h5 {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 0.5rem;
+            background: rgba(0, 0, 0, 0.7);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        .preview-box img {
+            width: 100%;
+            aspect-ratio: 4/3;
+            object-fit: cover;
+        }
+
+        .preview-box .placeholder {
+            width: 100%;
+            aspect-ratio: 4/3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+
+        /* Progress */
+        .progress-container {
+            display: none;
+            margin: 1.5rem 0;
+        }
+
+        .progress-container.active {
+            display: block;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--gradient-primary);
+            width: 0%;
+            transition: width var(--transition-normal);
+        }
+
+        .progress-text {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        /* Name input */
+        .name-input {
+            margin-bottom: 1.5rem;
+        }
+
+        .name-input label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        /* Depth upload zone */
+        .depth-upload-zone {
+            display: none;
+        }
+
+        .depth-upload-zone.active {
+            display: block;
+        }
+
+        /* Actions */
+        .actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .actions .btn {
+            flex: 1;
+            min-width: 150px;
+        }
+
+        /* Success message */
+        .success-message {
+            display: none;
+            padding: 1.5rem;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid var(--accent-green);
+            border-radius: var(--radius-md);
+            text-align: center;
+            margin-top: 1.5rem;
+        }
+
+        .success-message.active {
+            display: block;
+        }
+
+        .success-message h4 {
+            color: var(--accent-green);
+            margin-bottom: 0.5rem;
+        }
+
+        .success-message p {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .success-message .links {
+            margin-top: 1rem;
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .success-message a {
+            color: var(--accent-cyan);
+            text-decoration: none;
+            font-size: 0.85rem;
+        }
+
+        .success-message a:hover {
+            text-decoration: underline;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .preview-container.active {
+                grid-template-columns: 1fr;
+            }
+            
+            .mode-selector {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .mode-btn {
+                max-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-gradient" aria-hidden="true"></div>
+    
+    <nav role="navigation" aria-label="Navigation principale">
+        <a href="../index.html" aria-label="Retour à l'accueil">← Retour à l'accueil</a>
+        <span class="nav-title">Upload d'Image</span>
+        <span></span>
+    </nav>
+
+    <main role="main">
+        <div class="page-header">
+            <h1>📤 Upload d'Image</h1>
+            <p>
+                Ajoutez vos propres images pour explorer les effets de depth map.
+                Générez automatiquement des cartes de profondeur haute qualité.
+            </p>
+        </div>
+
+        <!-- Model Info -->
+        <div class="model-info" role="status">
+            <span class="model-info-icon" aria-hidden="true">🧠</span>
+            <div class="model-info-text">
+                <strong>Génération IA avec MiDaS</strong>
+                <p id="modelStatus">Cliquez sur "Générer" pour charger le modèle d'IA (première utilisation: ~30s)</p>
+            </div>
+        </div>
+
+        <!-- Mode Selector -->
+        <div class="mode-selector" role="radiogroup" aria-label="Mode de génération">
+            <button class="mode-btn active" 
+                    data-mode="local" 
+                    role="radio" 
+                    aria-checked="true"
+                    tabindex="0">
+                <div class="icon" aria-hidden="true">🧠</div>
+                <h3>Génération IA</h3>
+                <p>Utilise MiDaS pour une<br>depth map haute qualité</p>
+            </button>
+            <button class="mode-btn" 
+                    data-mode="manual" 
+                    role="radio" 
+                    aria-checked="false"
+                    tabindex="-1">
+                <div class="icon" aria-hidden="true">📁</div>
+                <h3>Upload Manuel</h3>
+                <p>Fournissez votre propre<br>depth map</p>
+            </button>
+        </div>
+
+        <div class="upload-container">
+            <!-- Image Upload Zone -->
+            <div class="upload-zone" id="imageUploadZone" role="button" tabindex="0" aria-label="Zone de dépôt pour l'image principale">
+                <div class="icon" aria-hidden="true">🖼️</div>
+                <h4>Glissez votre image ici</h4>
+                <p>ou cliquez pour sélectionner (JPG, PNG, WebP)</p>
+                <input type="file" id="imageInput" accept="image/*" aria-label="Sélectionner une image">
+            </div>
+
+            <!-- Depth Map Upload Zone (manual mode) -->
+            <div class="upload-zone depth-upload-zone" id="depthUploadZone" role="button" tabindex="0" aria-label="Zone de dépôt pour la depth map">
+                <div class="icon" aria-hidden="true">🗺️</div>
+                <h4>Glissez votre Depth Map ici</h4>
+                <p>Image en niveaux de gris (PNG recommandé)</p>
+                <input type="file" id="depthInput" accept="image/*" aria-label="Sélectionner une depth map">
+            </div>
+
+            <!-- Name Input -->
+            <div class="name-input">
+                <label for="imageName">Nom de l'image (optionnel)</label>
+                <input type="text" id="imageName" placeholder="Ma super image" maxlength="100">
+            </div>
+
+            <!-- Preview -->
+            <div class="preview-container" id="previewContainer" aria-live="polite">
+                <div class="preview-box">
+                    <h5>Image Originale</h5>
+                    <img id="previewOriginal" src="" alt="Aperçu de l'image originale">
+                </div>
+                <div class="preview-box">
+                    <h5>Depth Map</h5>
+                    <img id="previewDepth" src="" alt="Aperçu de la depth map" style="display: none;">
+                    <div class="placeholder" id="depthPlaceholder">
+                        En attente de génération...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progress -->
+            <div class="progress-container" id="progressContainer" aria-live="polite">
+                <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <p class="progress-text" id="progressText">Préparation...</p>
+            </div>
+
+            <!-- Actions -->
+            <div class="actions">
+                <button class="btn btn-secondary" id="resetBtn" aria-label="Réinitialiser le formulaire">
+                    🔄 Réinitialiser
+                </button>
+                <button class="btn btn-primary" id="generateBtn" disabled aria-label="Générer la depth map">
+                    🧠 Générer Depth Map
+                </button>
+                <button class="btn btn-primary" id="saveBtn" disabled style="display: none;" aria-label="Enregistrer l'image">
+                    💾 Enregistrer
+                </button>
+            </div>
+
+            <!-- Success -->
+            <div class="success-message" id="successMessage" role="alert">
+                <h4>✅ Image enregistrée avec succès!</h4>
+                <p>Votre image est maintenant disponible dans tous les effets.</p>
+                <div class="links">
+                    <a href="parallax.html">Tester Parallaxe →</a>
+                    <a href="displacement.html">Tester Displacement 3D →</a>
+                    <a href="../index.html">Voir tous les effets →</a>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Scripts -->
+    <script src="../assets/js/core/image-manager.js"></script>
+    <script src="../assets/js/core/depth-generator.js"></script>
+    
+    <script>
+        // State
+        let currentMode = 'local';
+        let originalImage = null;
+        let originalDataUrl = null;
+        let depthDataUrl = null;
+
+        // Elements
+        const modeButtons = document.querySelectorAll('.mode-btn');
+        const imageUploadZone = document.getElementById('imageUploadZone');
+        const depthUploadZone = document.getElementById('depthUploadZone');
+        const imageInput = document.getElementById('imageInput');
+        const depthInput = document.getElementById('depthInput');
+        const previewContainer = document.getElementById('previewContainer');
+        const previewOriginal = document.getElementById('previewOriginal');
+        const previewDepth = document.getElementById('previewDepth');
+        const depthPlaceholder = document.getElementById('depthPlaceholder');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const progressBar = progressFill.parentElement;
+        const generateBtn = document.getElementById('generateBtn');
+        const saveBtn = document.getElementById('saveBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const successMessage = document.getElementById('successMessage');
+        const imageName = document.getElementById('imageName');
+        const modelStatus = document.getElementById('modelStatus');
+
+        // Mode selection
+        modeButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                modeButtons.forEach(b => {
+                    b.classList.remove('active');
+                    b.setAttribute('aria-checked', 'false');
+                    b.setAttribute('tabindex', '-1');
+                });
+                btn.classList.add('active');
+                btn.setAttribute('aria-checked', 'true');
+                btn.setAttribute('tabindex', '0');
+                currentMode = btn.dataset.mode;
+                
+                depthUploadZone.classList.toggle('active', currentMode === 'manual');
+                
+                if (currentMode === 'manual') {
+                    generateBtn.textContent = '💾 Enregistrer';
+                    generateBtn.disabled = !(originalDataUrl && depthDataUrl);
+                } else {
+                    generateBtn.textContent = '🧠 Générer Depth Map';
+                    generateBtn.disabled = !originalDataUrl;
+                }
+            });
+
+            // Keyboard navigation
+            btn.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    const buttons = Array.from(modeButtons);
+                    const currentIndex = buttons.indexOf(btn);
+                    const nextIndex = e.key === 'ArrowRight' 
+                        ? (currentIndex + 1) % buttons.length
+                        : (currentIndex - 1 + buttons.length) % buttons.length;
+                    buttons[nextIndex].click();
+                    buttons[nextIndex].focus();
+                }
+            });
+        });
+
+        // Drag & drop
+        function setupDragDrop(zone, handler) {
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                zone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }, false);
+            });
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                zone.addEventListener(eventName, () => zone.classList.add('dragover'));
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                zone.addEventListener(eventName, () => zone.classList.remove('dragover'));
+            });
+
+            zone.addEventListener('drop', (e) => {
+                const file = e.dataTransfer.files[0];
+                if (file && file.type.startsWith('image/')) {
+                    handler(file);
+                }
+            });
+
+            zone.addEventListener('click', () => {
+                const input = zone.querySelector('input');
+                if (input) input.click();
+            });
+
+            zone.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    const input = zone.querySelector('input');
+                    if (input) input.click();
+                }
+            });
+        }
+
+        setupDragDrop(imageUploadZone, handleImageFile);
+        setupDragDrop(depthUploadZone, handleDepthFile);
+
+        imageInput.addEventListener('change', (e) => {
+            if (e.target.files[0]) handleImageFile(e.target.files[0]);
+        });
+
+        depthInput.addEventListener('change', (e) => {
+            if (e.target.files[0]) handleDepthFile(e.target.files[0]);
+        });
+
+        // Resize image for storage
+        function resizeImageForStorage(img, maxSize = 800) {
+            const canvas = document.createElement('canvas');
+            let w = img.naturalWidth || img.width;
+            let h = img.naturalHeight || img.height;
+            
+            if (w > maxSize || h > maxSize) {
+                if (w > h) {
+                    h = Math.round(h * maxSize / w);
+                    w = maxSize;
+                } else {
+                    w = Math.round(w * maxSize / h);
+                    h = maxSize;
+                }
+            }
+            
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            
+            return canvas.toDataURL('image/jpeg', 0.85);
+        }
+
+        function handleImageFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    originalImage = img;
+                    originalDataUrl = resizeImageForStorage(img, 800);
+                    previewOriginal.src = originalDataUrl;
+                    previewContainer.classList.add('active');
+                    
+                    if (!imageName.value) {
+                        imageName.value = file.name.replace(/\.[^/.]+$/, '');
+                    }
+                    
+                    console.log('Image chargée:', Math.round(originalDataUrl.length / 1024), 'KB');
+                    updateButtonState();
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function handleDepthFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    depthDataUrl = resizeImageForStorage(img, 800);
+                    previewDepth.src = depthDataUrl;
+                    previewDepth.style.display = 'block';
+                    depthPlaceholder.style.display = 'none';
+                    console.log('Depth map chargée:', Math.round(depthDataUrl.length / 1024), 'KB');
+                    updateButtonState();
+                };
+                img.onerror = () => {
+                    depthDataUrl = e.target.result;
+                    previewDepth.src = depthDataUrl;
+                    previewDepth.style.display = 'block';
+                    depthPlaceholder.style.display = 'none';
+                    updateButtonState();
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function updateButtonState() {
+            if (currentMode === 'manual') {
+                generateBtn.disabled = !(originalDataUrl && depthDataUrl);
+            } else {
+                generateBtn.disabled = !originalDataUrl;
+            }
+        }
+
+        // Generate / Save
+        generateBtn.addEventListener('click', async () => {
+            if (currentMode === 'manual') {
+                saveImage();
+            } else {
+                await generateDepthMap();
+            }
+        });
+
+        async function generateDepthMap() {
+            if (!originalImage) {
+                alert('Veuillez d\'abord sélectionner une image');
+                return;
+            }
+            
+            progressContainer.classList.add('active');
+            generateBtn.disabled = true;
+            generateBtn.textContent = '⏳ Chargement du modèle...';
+            
+            const updateProgress = (percent, text) => {
+                progressFill.style.width = percent + '%';
+                progressBar.setAttribute('aria-valuenow', percent);
+                progressText.textContent = text;
+                
+                // Update model status
+                if (percent < 50) {
+                    modelStatus.textContent = text;
+                }
+            };
+
+            try {
+                console.log('Démarrage génération depth map avec MiDaS...');
+                
+                depthDataUrl = await window.depthGenerator.generateLocal(originalImage, updateProgress);
+                
+                const modelType = window.depthGenerator.getModelType();
+                modelStatus.textContent = modelType === 'midas' 
+                    ? '✅ MiDaS chargé - Génération IA haute qualité'
+                    : '⚡ Mode heuristique - Génération rapide';
+                
+                console.log('Génération terminée, modèle:', modelType);
+                
+                if (!depthDataUrl) {
+                    throw new Error('La génération n\'a pas produit de résultat');
+                }
+                
+                previewDepth.src = depthDataUrl;
+                previewDepth.style.display = 'block';
+                depthPlaceholder.style.display = 'none';
+                
+                generateBtn.style.display = 'none';
+                saveBtn.style.display = 'flex';
+                saveBtn.disabled = false;
+                progressText.textContent = '✅ Depth map générée ! Cliquez sur Enregistrer.';
+                
+            } catch (error) {
+                console.error('Erreur génération:', error);
+                progressText.textContent = '❌ Erreur: ' + (error.message || 'Erreur inconnue');
+                generateBtn.disabled = false;
+                generateBtn.textContent = '🧠 Générer Depth Map';
+            }
+        }
+
+        saveBtn.addEventListener('click', saveImage);
+
+        function saveImage() {
+            if (!originalDataUrl) {
+                alert('Image originale manquante');
+                return;
+            }
+            if (!depthDataUrl) {
+                alert('Depth map manquante');
+                return;
+            }
+            
+            const name = imageName.value.trim() || 'Image ' + new Date().toLocaleDateString();
+            
+            try {
+                window.imageManager.addUploadedImage({
+                    name,
+                    originalUrl: originalDataUrl,
+                    depthUrl: depthDataUrl
+                });
+                
+                successMessage.classList.add('active');
+                saveBtn.disabled = true;
+                saveBtn.textContent = '✅ Enregistré !';
+                
+                console.log('Image enregistrée avec succès');
+            } catch (error) {
+                console.error('Erreur enregistrement:', error);
+                alert('Erreur lors de l\'enregistrement: ' + error.message);
+            }
+        }
+
+        // Reset
+        resetBtn.addEventListener('click', () => {
+            originalImage = null;
+            originalDataUrl = null;
+            depthDataUrl = null;
+            
+            previewContainer.classList.remove('active');
+            progressContainer.classList.remove('active');
+            successMessage.classList.remove('active');
+            
+            previewOriginal.src = '';
+            previewDepth.src = '';
+            previewDepth.style.display = 'none';
+            depthPlaceholder.style.display = 'flex';
+            
+            generateBtn.style.display = 'flex';
+            generateBtn.disabled = true;
+            generateBtn.textContent = currentMode === 'manual' ? '💾 Enregistrer' : '🧠 Générer Depth Map';
+            saveBtn.style.display = 'none';
+            saveBtn.textContent = '💾 Enregistrer';
+            
+            imageName.value = '';
+            imageInput.value = '';
+            depthInput.value = '';
+            
+            progressFill.style.width = '0%';
+            progressText.textContent = '';
+        });
+
+        // Initialize
+        window.imageManager.init();
+    </script>
+</body>
+</html>
